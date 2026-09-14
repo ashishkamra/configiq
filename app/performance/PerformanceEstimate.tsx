@@ -150,8 +150,15 @@ export default function QuickEstimate() {
   }, [hydrated, prefillChecked, settingsDefaultModel]);
 
   // If defaultSystem not in catalog, fall back to first available
+  // but only if it's the initial default, not a prefilled value
+  const gpuWasPrefilled = React.useRef(false);
   React.useEffect(() => {
-    if (prefillChecked && aicGpus.length > 0 && !aicGpus.find(g => g.systemId === gpu)) {
+    const prefill = parsePerformancePrefill(globalThis.location?.search || '');
+    gpuWasPrefilled.current = Boolean(prefill.system);
+  }, []);
+
+  React.useEffect(() => {
+    if (prefillChecked && aicGpus.length > 0 && !aicGpus.find(g => g.systemId === gpu) && !gpuWasPrefilled.current) {
       setGpu(aicGpus[0].systemId);
     }
   }, [aicGpus, gpu, prefillChecked]);
