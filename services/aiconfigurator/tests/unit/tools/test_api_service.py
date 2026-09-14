@@ -17,8 +17,10 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
+from configiq.systems import load_device_names_from_perf_data, supported_systems
 from fastapi.testclient import TestClient
 
+from tools.api_service import app as app_module
 from tools.api_service.app import app
 
 client = TestClient(app)
@@ -497,6 +499,7 @@ class TestModels:
 
 class TestSystems:
 
+    @patch.dict("tools.api_service.app._DEVICE_DISPLAY_NAMES", {"h200_sxm": "NVIDIA H200 SXM", "a100_sxm": "NVIDIA A100-SXM4-80GB"})
     @patch("tools.api_service.app.supported_systems", lambda: {"h200_sxm", "a100_sxm"})
     def test_returns_sorted_objects(self):
         resp = client.get("/systems")
@@ -524,6 +527,7 @@ class TestSystems:
         assert sys["tdp_watts"] == 700.0
         assert sys["gpus_per_node"] == 8
 
+    @patch.dict("tools.api_service.app._DEVICE_DISPLAY_NAMES", {"h200_sxm": "NVIDIA H200 SXM"})
     @patch("tools.api_service.app.load_system_spec")
     @patch("tools.api_service.app.supported_systems", lambda: {"h200_sxm"})
     def test_include_specs_bandwidth_and_tflops(self, mock_spec):
@@ -533,6 +537,7 @@ class TestSystems:
         assert sys["memory_bandwidth_bytes"] == 4800000000000
         assert abs(sys["bf16_tflops"] - 989.0) < 0.1
 
+    @patch.dict("tools.api_service.app._DEVICE_DISPLAY_NAMES", {"h200_sxm": "NVIDIA H200 SXM"})
     @patch("tools.api_service.app.supported_systems", lambda: {"h200_sxm"})
     def test_no_include_omits_specs(self):
         resp = client.get("/systems")
@@ -540,6 +545,7 @@ class TestSystems:
         assert "vendor" not in sys
         assert "memory_bytes" not in sys
 
+    @patch.dict("tools.api_service.app._DEVICE_DISPLAY_NAMES", {"h200_sxm": "NVIDIA H200 SXM"})
     @patch("tools.api_service.app.load_system_spec")
     @patch("tools.api_service.app.supported_systems", lambda: {"h200_sxm"})
     def test_spec_failure_still_returns_entry(self, mock_spec):
@@ -549,6 +555,26 @@ class TestSystems:
         sys = resp.json()["systems"][0]
         assert sys["id"] == "h200_sxm"
         assert "vendor" not in sys
+
+    @patch.dict(
+        "tools.api_service.app._DEVICE_DISPLAY_NAMES",
+        {"h200_sxm": "NVIDIA H200 SXM"},
+        clear=True,
+    )
+    @patch("tools.api_service.app.supported_systems", lambda: {"h200_sxm", "l4"})
+    def test_hides_systems_without_display_name(self):
+        # l4 is supported but has no perf-data display name -> excluded.
+        resp = client.get("/systems")
+        assert resp.status_code == 200
+        ids = [s["id"] for s in resp.json()["systems"]]
+        assert ids == ["h200_sxm"]
+
+    def test_startup_fails_without_display_names(self):
+        with (
+            patch.object(app_module, "load_device_names_from_perf_data", return_value={}),
+            pytest.raises(RuntimeError, match="valid performance data"),
+        ):
+            app_module.startup_event()
 
 
 # ─── Integration tests (require SDK) ─────────────────────────────────────────
@@ -605,6 +631,15 @@ def _skip_if_missing_perf_data(resp) -> None:
     reason="aiconfigurator SDK not installed or missing perf data",
 )
 class TestIntegration:
+
+    @classmethod
+    def setup_class(cls):
+        device_names = load_device_names_from_perf_data()
+        if not device_names:
+            pytest.skip("device display names unavailable")
+        # Replicate startup_event(): only genuine loaded names, no id fallbacks.
+        # Systems absent from this map are hidden by /systems.
+        app_module._DEVICE_DISPLAY_NAMES = device_names
 
     def test_recommend_real(self):
         resp = client.post("/recommend", json={
@@ -663,6 +698,35 @@ class TestIntegration:
         systems = resp.json()["systems"]
         assert len(systems) > 0
         assert all(s["memory_bytes"] > 0 for s in systems)
+
+    def test_systems_hides_systems_without_perf_data(self):
+        """Regression guard for the GPU dropdown culling.
+
+        /systems must return exactly the systems that have a genuine perf-data
+        display name, and never a system whose only "name" is its raw id (e.g.
+        a30, l4, a100_pcie, h100_pcie — SDK dirs with no parquet). A prior
+        "startup fallback dict" change (58466b6) reintroduced id-fallbacks and
+        dropped the cull, surfacing those raw ids in the UI.
+
+        Ground truth is recomputed here from configiq.systems rather than read
+        from the app's module state, so this cannot be defeated by adjusting
+        startup_event() or the test setup to build a fallback dict.
+        """
+        named = set(load_device_names_from_perf_data())
+        supported = supported_systems()
+
+        resp = client.get("/systems")
+        assert resp.status_code == 200
+        systems = resp.json()["systems"]
+        returned = {s["id"] for s in systems}
+
+        # Exactly the genuinely-named systems appear — no id fallbacks.
+        assert returned == named & supported
+        # Supported-but-unnamed systems (no parquet) must be excluded.
+        assert returned.isdisjoint(supported - named)
+        # The visible symptom of the bug: a system shown with no real name.
+        for s in systems:
+            assert s["name"] != s["id"], f"{s['id']} surfaced without a display name"
 
     def test_estimate_real(self):
         resp = client.post("/estimate", json={
@@ -1005,8 +1069,6 @@ class TestOpenTelemetry:
 
     def test_obs_flag_set_correctly(self):
         """Verify the _OBS flag is set based on configiq[otel] import success."""
-        from tools.api_service import app as app_module
-
         # The flag should be True if the otel extra is installed, False otherwise
         assert isinstance(app_module._OBS, bool)
 
@@ -1025,8 +1087,6 @@ class TestMCPServer:
 
     def test_mcp_endpoint_available_when_enabled(self):
         """MCP SSE endpoint is available when fastapi-mcp is installed."""
-        from tools.api_service import app as app_module
-
         if not app_module._MCP:
             pytest.skip("fastapi-mcp not installed")
 
@@ -1045,8 +1105,6 @@ class TestMCPServer:
     @patch("tools.api_service.app.cli_recommend")
     def test_mcp_tools_wrap_api_endpoints(self, mock_recommend):
         """MCP tools are properly registered when MCP is available."""
-        from tools.api_service import app as app_module
-
         if not app_module._MCP:
             pytest.skip("fastapi-mcp not installed")
 
@@ -1060,8 +1118,6 @@ class TestMetrics:
 
     def test_metrics_unavailable_without_otel(self):
         """Metrics endpoint returns 503 when OpenTelemetry not installed."""
-        from tools.api_service import app as app_module
-
         if app_module._OBS:
             pytest.skip("the otel extra is installed")
 
@@ -1071,8 +1127,6 @@ class TestMetrics:
 
     def test_metrics_prometheus_format_default(self):
         """Metrics endpoint returns Prometheus text format by default."""
-        from tools.api_service import app as app_module
-
         if not app_module._OBS:
             pytest.skip("the otel extra is not installed")
 
@@ -1084,8 +1138,6 @@ class TestMetrics:
 
     def test_metrics_prometheus_format_explicit(self):
         """Metrics endpoint returns Prometheus format with text/plain Accept header."""
-        from tools.api_service import app as app_module
-
         if not app_module._OBS:
             pytest.skip("the otel extra is not installed")
 
@@ -1095,8 +1147,6 @@ class TestMetrics:
 
     def test_metrics_otlp_json_format(self):
         """Metrics endpoint returns OTLP JSON format with worker identification."""
-        from tools.api_service import app as app_module
-
         if not app_module._OBS:
             pytest.skip("the otel extra is not installed")
 

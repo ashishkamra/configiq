@@ -554,6 +554,9 @@ def _architecture_from_sm(sm_version: int) -> str:
 # Cache of system_id -> vendor device name, populated at startup from the
 # aiconfigurator SDK (via configiq.systems). aicostings loads the same map from
 # the same source so the two services never drift on GPU naming.
+# Only systems with genuine perf-data display names appear here; systems without
+# perf data are absent and get hidden from /systems (see get_systems). Startup
+# fails outright if this ends up empty, so the map is never empty at request time.
 _DEVICE_DISPLAY_NAMES: dict[str, str] = {}
 
 
@@ -597,15 +600,21 @@ else:
 def startup_event():
     """Load GPU display names from the aiconfigurator SDK at startup.
 
-    Systems without loaded display-name data are excluded from /systems responses.
-    Logs coverage gaps for ops visibility.
+    Systems without a loaded display name (no perf benchmark data) are excluded
+    from /systems responses (see get_systems). If no display names load at all,
+    startup fails — the API refuses to serve without valid perf data. Logs
+    coverage gaps for ops visibility.
     """
     global _DEVICE_DISPLAY_NAMES
     _DEVICE_DISPLAY_NAMES = load_device_names_from_perf_data()
+    if not _DEVICE_DISPLAY_NAMES:
+        raise RuntimeError(
+            "No GPU display names loaded from perf data; refusing to start "
+            "without valid performance data."
+        )
 
-    # Log which systems lack display names for ops visibility
-    supported = supported_systems()
-    missing = supported - set(_DEVICE_DISPLAY_NAMES.keys())
+    # Log which supported systems lack perf data (they are hidden from /systems).
+    missing = supported_systems() - set(_DEVICE_DISPLAY_NAMES.keys())
     if missing:
         logger.warning(f"No display names for {len(missing)} GPU systems: {missing}")
 
@@ -944,6 +953,7 @@ def get_systems(
     for sys_id in sorted(supported_systems()):
         device_name = _DEVICE_DISPLAY_NAMES.get(sys_id)
         if device_name is None:
+            # No perf-data display name -> no benchmark data; hide it.
             continue
         entry: dict[str, Any] = {
             "id": sys_id,
