@@ -612,14 +612,16 @@ class TestIntegration:
 
     @classmethod
     def setup_class(cls):
-        from configiq.systems import load_device_names_from_perf_data
+        from configiq.systems import load_device_names_from_perf_data, supported_systems
 
         import tools.api_service.app as _app_mod
         device_names = load_device_names_from_perf_data()
         if not device_names:
             pytest.skip("device display names unavailable")
-        _app_mod._DEVICE_DISPLAY_NAMES = device_names
-        _app_mod._DEVICE_NAMES_LOADED = True
+        # Replicate startup_event() logic: build complete dict with fallbacks
+        supported = supported_systems()
+        _app_mod._DEVICE_DISPLAY_NAMES = {sys_id: device_names.get(sys_id, sys_id)
+                                          for sys_id in supported}
 
     def test_recommend_real(self):
         resp = client.post("/recommend", json={

@@ -554,8 +554,8 @@ def _architecture_from_sm(sm_version: int) -> str:
 # Cache of system_id -> vendor device name, populated at startup from the
 # aiconfigurator SDK (via configiq.systems). aicostings loads the same map from
 # the same source so the two services never drift on GPU naming.
+# Systems missing from loaded display-name data fall back to their system ID.
 _DEVICE_DISPLAY_NAMES: dict[str, str] = {}
-_DEVICE_NAMES_LOADED: bool = False
 
 
 def _parse_include(include: str | None) -> set[str]:
@@ -596,10 +596,24 @@ else:
 
 @app.on_event("startup")
 def startup_event():
-    """Load GPU display names from the aiconfigurator SDK at startup."""
-    global _DEVICE_DISPLAY_NAMES, _DEVICE_NAMES_LOADED
-    _DEVICE_DISPLAY_NAMES = load_device_names_from_perf_data()
-    _DEVICE_NAMES_LOADED = bool(_DEVICE_DISPLAY_NAMES)
+    """Load GPU display names from the aiconfigurator SDK at startup.
+
+    Systems missing from display-name data (e.g., legacy systems or those
+    without perf benchmarks) fall back to their system ID. Logs coverage
+    gaps for ops visibility.
+    """
+    global _DEVICE_DISPLAY_NAMES
+    loaded = load_device_names_from_perf_data()
+    supported = supported_systems()
+
+    # Build complete dict: loaded names + fallback IDs for missing systems
+    _DEVICE_DISPLAY_NAMES = {sys_id: loaded.get(sys_id, sys_id)
+                             for sys_id in supported}
+
+    # Log what's missing so ops can see the gap
+    missing = supported - set(loaded.keys())
+    if missing:
+        logger.warning(f"No display names for {len(missing)} GPU systems: {missing}")
 
 
 @app.post("/recommend")
@@ -934,14 +948,9 @@ def get_systems(
 
     systems = []
     for sys_id in sorted(supported_systems()):
-        device_name = _DEVICE_DISPLAY_NAMES.get(sys_id)
-        if device_name is None:
-            if _DEVICE_NAMES_LOADED:
-                continue
-            device_name = sys_id
         entry: dict[str, Any] = {
             "id": sys_id,
-            "name": device_name,
+            "name": _DEVICE_DISPLAY_NAMES[sys_id],
         }
         if want_specs:
             try:
