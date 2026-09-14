@@ -934,11 +934,7 @@ def get_systems(
 
     systems = []
     for sys_id in sorted(supported_systems()):
-        device_name = _DEVICE_DISPLAY_NAMES.get(sys_id)
-        if device_name is None:
-            if _DEVICE_NAMES_LOADED:
-                continue
-            device_name = sys_id
+        device_name = _DEVICE_DISPLAY_NAMES.get(sys_id, sys_id)
         entry: dict[str, Any] = {
             "id": sys_id,
             "name": device_name,
