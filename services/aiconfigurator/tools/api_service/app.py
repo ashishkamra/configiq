@@ -595,9 +595,19 @@ else:
 
 @app.on_event("startup")
 def startup_event():
-    """Load GPU display names from the aiconfigurator SDK at startup."""
+    """Load GPU display names from the aiconfigurator SDK at startup.
+
+    Systems without loaded display-name data are excluded from /systems responses.
+    Logs coverage gaps for ops visibility.
+    """
     global _DEVICE_DISPLAY_NAMES
     _DEVICE_DISPLAY_NAMES = load_device_names_from_perf_data()
+
+    # Log which systems lack display names for ops visibility
+    supported = supported_systems()
+    missing = supported - set(_DEVICE_DISPLAY_NAMES.keys())
+    if missing:
+        logger.warning(f"No display names for {len(missing)} GPU systems: {missing}")
 
 
 @app.post("/recommend")
