@@ -33,7 +33,7 @@ import { ModelInput, type ModelStatus } from '@/components/ui/ModelInput';
 import { ComboBox, type ComboBoxItem } from '@/components/ModelComboBox/ModelComboBox';
 import { buildModelItems, needsHfConfig } from '@/lib/model-options';
 import { GpuSystemInput } from '@/components/ui/GpuSystemInput';
-import { useAicCatalog } from '@/lib/hooks/useAicCatalog';
+import { useAicCatalog, type ModelSpec } from '@/lib/hooks/useAicCatalog';
 import { GpuChipLoader } from '@/components/GpuChipLoader/GpuChipLoader';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useCostings, resolveCloudRate } from '@/lib/hooks/useCostings';
@@ -46,6 +46,12 @@ import { parsePerformancePrefill } from './performance-prefill';
 
 function modelSuggestions(): string {
   return getAppConfig().suggestedModelNames.join(', ');
+}
+
+function detectMoe(spec: ModelSpec | undefined, hfConfig: HFModelConfig | null): boolean {
+  const catalogExperts = spec?.num_experts ?? 0;
+  const hfExperts = (hfConfig?.text_config?.num_experts as number) ?? (hfConfig?.num_experts as number) ?? (hfConfig?.num_local_experts as number) ?? 0;
+  return catalogExperts > 1 || hfExperts > 1;
 }
 
 /** String-backed parallelism inputs for one disagg pool (prefill/decode). */
@@ -400,10 +406,8 @@ export default function QuickEstimate() {
     const timer = setTimeout(async () => {
       try {
         const spec = modelSpecs.get(model)
-        // Detect MoE from both catalog metadata and HF config for UI display only
-        const catalogExperts = spec?.num_experts ?? 0
-        const hfExperts = (hfConfig?.num_experts as number) ?? (hfConfig?.num_local_experts as number) ?? 0
-        const isMoe = catalogExperts > 1 || hfExperts > 1
+        // Detect MoE from both catalog metadata and HF config
+        const isMoe = detectMoe(spec, hfConfig)
 
         // Build request once for both debug and API call
         const estimateInput: EstimateAdapterInput = {
@@ -602,9 +606,7 @@ export default function QuickEstimate() {
 
   // Detect MoE for UI display
   const spec = modelSpecs.get(model)
-  const catalogExperts = spec?.num_experts ?? 0
-  const hfExperts = (hfConfig?.text_config?.num_experts as number) ?? (hfConfig?.num_experts as number) ?? (hfConfig?.num_local_experts as number) ?? 0
-  const isMoe = catalogExperts > 1 || hfExperts > 1
+  const isMoe = detectMoe(spec, hfConfig)
 
   // Use live pricing if available, fallback to estimated pricing from hardware cost
   const currentAicGpu = aicGpus.find(g => g.systemId === gpu);
@@ -705,10 +707,7 @@ export default function QuickEstimate() {
   // Build the /api/estimate request body from current form state and GPU-specific values
   const buildEstimateRequestBody = React.useCallback(() => {
     const spec = modelSpecs.get(model);
-    const catalogExperts = spec?.num_experts ?? 0;
-    const hfExperts = (hfConfig?.num_experts as number) ??
-      (hfConfig?.num_local_experts as number) ?? 0;
-    const isMoe = catalogExperts > 1 || hfExperts > 1;
+    const isMoe = detectMoe(spec, hfConfig);
 
     return {
       model_path: model || '(select model)',
@@ -734,7 +733,8 @@ export default function QuickEstimate() {
         ? (hfConfig as Record<string, unknown> | null)
         : null,
       moe_quant_mode: isMoe ? testMoeQuantMode : undefined,
-      ...(isMoe && { moe_ep_size: testMoeEpSize, moe_tp_size: testMoeEtpSize }),
+      moe_ep_size: testMoeEpSize,
+      moe_tp_size: testMoeEtpSize,
       ...(servingMode === 'disagg' && {
         mode: 'disagg',
         prefill_tp_size: parsePerfPhase(prefillCfg).tp,
