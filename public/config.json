@@ -19,7 +19,8 @@
     "deepseek-ai/DeepSeek-V4-Pro",
     "openai/gpt-oss-120b",
     "RedHatAI/GLM-5.2-FP8",
-    "moonshotai/Kimi-K2.5"
+    "moonshotai/Kimi-K2.5",
+    "moonshotai/Kimi-K3"
   ],
   "huggingFaceModels": [
     "RedHatAI/GLM-5.2-NVFP4-FP8"
