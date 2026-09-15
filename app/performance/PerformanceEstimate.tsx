@@ -1237,7 +1237,7 @@ export default function QuickEstimate() {
           <Button
             variant="primary"
             size="lg"
-            onClick={() => { setTestResult(null); setCalcTrigger(t => t + 1); }}
+            onClick={() => { setTestResult(null); setTestError(null); setTestErrorCode(null); setCalcTrigger(t => t + 1); }}
             isDisabled={isCalculating || !gpu || !model || catalogLoading || invalidISL || invalidOSL || invalidUsers || invalidTpSize || invalidPpSize}
           >
             {isCalculating ? 'Calculating...' : 'Calculate'}

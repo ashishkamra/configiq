@@ -237,11 +237,12 @@ export default function KvCacheCalc() {
         }),
       )
 
+      const failed = responses.find(r => r.data?.status === 'failed')
+
       setDebugResponse(servingMode === 'disagg' ? responses.map(r => r.data) : responses[0].data)
-      setDebugStatus(responses[responses.length - 1].status)
+      setDebugStatus(failed?.status ?? responses[responses.length - 1].status)
       setDebugDuration(Math.round(performance.now() - t0))
 
-      const failed = responses.find(r => r.data?.status === 'failed')
       if (failed) {
         setError(failed.data.error?.message ?? 'An unexpected error occurred')
         return
