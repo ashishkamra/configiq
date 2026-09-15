@@ -436,4 +436,51 @@ describe('fetchEstimateAsInferenceResult - response handling', () => {
     expect(result.memory_analysis).toHaveProperty('weight_gb')
     expect(result.memory_analysis).toHaveProperty('kv_cache_used_gb')
   })
+
+  it('computes performance metrics (TTFT, TPOT, request latency, concurrency, throughput)', async () => {
+    const mockFetch = mockFetchOk(VALID_RESPONSE)
+    vi.stubGlobal('fetch', mockFetch)
+
+    const result = await fetchEstimateAsInferenceResult(VALID_INPUT)
+
+    expect(result.performance).toBeDefined()
+    expect(result.performance?.ttft_ms).toBe(100)
+    expect(result.performance?.tpot_ms).toBe(20)
+    // request_latency_ms = ttft + tpot * osl = 100 + 20 * 128 = 2660
+    expect(result.performance?.request_latency_ms).toBe(2660)
+    // throughput_tokens_per_sec = (osl * 1000) / request_latency_ms = (128 * 1000) / 2660 ≈ 48.1
+    expect(result.performance?.throughput_tokens_per_sec).toBeGreaterThan(0)
+    // concurrency = floor(max_num_seqs) = floor(32) from serving_config
+    expect(result.performance?.concurrency).toBe(32)
+  })
+
+  it('handles zero output sequence length gracefully', async () => {
+    const mockFetch = mockFetchOk(VALID_RESPONSE)
+    vi.stubGlobal('fetch', mockFetch)
+
+    const result = await fetchEstimateAsInferenceResult({
+      ...VALID_INPUT,
+      osl: 0,
+    })
+
+    expect(result.performance).toBeDefined()
+    expect(result.performance?.request_latency_ms).toBe(100) // ttft + 0 * tpot
+    expect(result.performance?.throughput_tokens_per_sec).toBe(0) // Can't divide by zero
+  })
+
+  it('returns debug info when captureDebug is true', async () => {
+    const mockFetch = mockFetchOk(VALID_RESPONSE)
+    vi.stubGlobal('fetch', mockFetch)
+
+    const result = await fetchEstimateAsInferenceResult(VALID_INPUT, true)
+
+    expect(result).toHaveProperty('result')
+    expect(result).toHaveProperty('debugRequest')
+    expect(result).toHaveProperty('debugResponse')
+    expect(result).toHaveProperty('debugStatus')
+    expect(result).toHaveProperty('debugDuration')
+    expect((result as any).debugStatus).toBe(200)
+    expect((result as any).debugRequest).toHaveProperty('model_path')
+    expect((result as any).debugResponse).toEqual(VALID_RESPONSE)
+  })
 })

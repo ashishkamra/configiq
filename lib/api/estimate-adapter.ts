@@ -80,9 +80,26 @@ function deriveBottleneck(ttft: number, tpot: number) {
   }
 }
 
+export interface EstimateWithDebug {
+  result: InferenceConfigResult
+  debugRequest: Record<string, unknown>
+  debugResponse: Record<string, unknown>
+  debugStatus: number
+  debugDuration: number
+}
+
+export function fetchEstimateAsInferenceResult(
+  input: EstimateAdapterInput,
+  captureDebug: true
+): Promise<EstimateWithDebug>
+export function fetchEstimateAsInferenceResult(
+  input: EstimateAdapterInput,
+  captureDebug?: false
+): Promise<InferenceConfigResult>
 export async function fetchEstimateAsInferenceResult(
-  input: EstimateAdapterInput
-): Promise<InferenceConfigResult> {
+  input: EstimateAdapterInput,
+  captureDebug: boolean = false
+): Promise<EstimateWithDebug | InferenceConfigResult> {
   const body: Record<string, unknown> = {
     model_path: input.model_path,
     system: input.system,
@@ -128,11 +145,13 @@ export async function fetchEstimateAsInferenceResult(
     body.moe_ep_size = input.tp_size
   }
 
+  const startTime = performance.now()
   const res = await fetch('/api/estimate?include=config,memory', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
+  const duration = Math.round(performance.now() - startTime)
 
   const data = await res.json()
 
@@ -189,7 +208,13 @@ export async function fetchEstimateAsInferenceResult(
     warnings.push('Disaggregated mode was requested but the backend returned an aggregated estimate.')
   }
 
-  return {
+  const ttft = data.ttft ?? 0
+  const tpot = data.tpot ?? 0
+  const requestLatency = ttft + tpot * input.osl
+  const throughput = input.osl > 0 && requestLatency > 0 ? (input.osl * 1000) / requestLatency : 0
+  const concurrency = Math.max(0, Math.floor(maxNumSeqs))
+
+  const result: InferenceConfigResult = {
     mode: isDisagg ? 'disagg' : 'agg',
     disagg,
     memory_analysis: {
@@ -220,7 +245,14 @@ export async function fetchEstimateAsInferenceResult(
       pp_size: pp,
       topology_note: `TP=${tp}, PP=${pp}, batch=${input.batch_size}`,
     },
-    bottleneck_analysis: deriveBottleneck(data.ttft ?? 0, data.tpot ?? 0),
+    performance: {
+      ttft_ms: ttft,
+      tpot_ms: tpot,
+      request_latency_ms: requestLatency,
+      throughput_tokens_per_sec: throughput,
+      concurrency: Math.max(0, concurrency),
+    },
+    bottleneck_analysis: deriveBottleneck(ttft, tpot),
     diagnostics: {
       nvidia_smi_watch: 'nvidia-smi dmon -s pucvmet -d 1',
       dcgm_metrics: ['DCGM_FI_PROF_GR_ENGINE_ACTIVE', 'DCGM_FI_DEV_FB_USED'],
@@ -228,4 +260,16 @@ export async function fetchEstimateAsInferenceResult(
     },
     warnings,
   }
+
+  if (captureDebug) {
+    return {
+      result,
+      debugRequest: body,
+      debugResponse: data,
+      debugStatus: res.status,
+      debugDuration: duration,
+    }
+  }
+
+  return result
 }

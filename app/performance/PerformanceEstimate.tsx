@@ -24,9 +24,10 @@ import styles from './PerformanceEstimate.module.css';
 import { Term, FlipTile, Sparkline, useCountUp } from './quickEstimateHelpers';
 import { ProductTour, type TourStep } from '@/components/ProductTour';
 import { SaveEstimateModal } from './SaveEstimateModal';
+import { DebugPanel } from '@/components/DebugPanel/DebugPanel';
 import { fetchModelConfig, type HFModelConfig } from '@/lib/huggingface/fetch-config';
 import { saveEstimate, getSavedEstimateCount } from '@/lib/saved-estimates';
-import { fetchEstimateAsInferenceResult, EstimateError } from '@/lib/api/estimate-adapter';
+import { fetchEstimateAsInferenceResult, EstimateError, type EstimateAdapterInput } from '@/lib/api/estimate-adapter';
 import { InfoStrip, InfoStripAction } from '@/components/ui/InfoStrip';
 import { ModelInput, type ModelStatus } from '@/components/ui/ModelInput';
 import { ComboBox, type ComboBoxItem } from '@/components/ModelComboBox/ModelComboBox';
@@ -164,8 +165,7 @@ export default function QuickEstimate() {
   }, [aicGpus, gpu, prefillChecked]);
 
   const [fav, setFav] = React.useState(false);
-  const [expanded, setExpanded] = React.useState<string[]>([]);
-  const [showApi, setShowApi] = React.useState(false);
+  const [expanded, setExpanded] = React.useState<string[]>(['perf']);
   const [showTour, setShowTour] = React.useState(false);
   const [tourSeen, setTourSeen] = React.useState(false);
 
@@ -173,6 +173,13 @@ export default function QuickEstimate() {
   const [testResult, setTestResult] = React.useState<InferenceConfigResult | null>(null);
   const [testError, setTestError] = React.useState<string | null>(null);
   const [testErrorCode, setTestErrorCode] = React.useState<string | null>(null);
+
+  // Debug panel
+  const [debugOpen, setDebugOpen] = React.useState(false);
+  const [debugRequest, setDebugRequest] = React.useState<Record<string, unknown> | null>(null);
+  const [debugResponse, setDebugResponse] = React.useState<Record<string, unknown> | null>(null);
+  const [debugStatus, setDebugStatus] = React.useState<number | null>(null);
+  const [debugDuration, setDebugDuration] = React.useState<number | null>(null);
 
   // HuggingFace config fetching
   const [hfConfig, setHfConfig] = React.useState<HFModelConfig | null>(null);
@@ -229,6 +236,8 @@ export default function QuickEstimate() {
   const [testKVCachePrecision, setTestKVCachePrecision] = React.useState<'FP16' | 'FP8' | 'NVFP4'>('FP16');
   const [testMoeQuantMode, setTestMoeQuantMode] = React.useState<'w4a16_mxfp4' | 'w4a8_mxfp4_mxfp8' | 'w4a16_mxfp4_cutlass' | 'w4a8_mxfp4_mxfp8_trtllm'>('w4a16_mxfp4');
   const [testPpSize, setTestPpSize] = React.useState(1);
+  const [testMoeEpSize, setTestMoeEpSize] = React.useState(1);
+  const [testMoeEtpSize, setTestMoeEtpSize] = React.useState(1);
 
   // Disagg: prefill and decode pools with independent parallelism / batch.
   const [servingMode, setServingMode] = React.useState<'agg' | 'disagg'>('agg');
@@ -241,6 +250,8 @@ export default function QuickEstimate() {
   const [prefixInput, setPrefixInput] = React.useState('0');
   const [tpSizeInput, setTpSizeInput] = React.useState('1');
   const [ppSizeInput, setPpSizeInput] = React.useState('1');
+  const [moeEpSizeInput, setMoeEpSizeInput] = React.useState('1');
+  const [moeEtpSizeInput, setMoeEtpSizeInput] = React.useState('1');
 
   const invalidISL = islInput === '' || parseInt(islInput, 10) < 1;
   const invalidOSL = oslInput === '' || parseInt(oslInput, 10) < 1;
@@ -290,6 +301,28 @@ export default function QuickEstimate() {
     setTestPrefix(isNaN(n) ? 0 : n);
   };
 
+  const handleMoeEpSizeChange = (raw: string) => {
+    const digits = raw.replace(/[^0-9]/g, '');
+    setMoeEpSizeInput(digits);
+    const n = parseInt(digits, 10);
+    if (digits === '') {
+      setTestMoeEpSize(1);
+    } else if (!isNaN(n) && n >= 1) {
+      setTestMoeEpSize(n);
+    }
+  };
+
+  const handleMoeEtpSizeChange = (raw: string) => {
+    const digits = raw.replace(/[^0-9]/g, '');
+    setMoeEtpSizeInput(digits);
+    const n = parseInt(digits, 10);
+    if (digits === '') {
+      setTestMoeEtpSize(1);
+    } else if (!isNaN(n) && n >= 1) {
+      setTestMoeEtpSize(n);
+    }
+  };
+
   const [activePreset, setActivePreset] = React.useState<string>('default');
 
   const applyPreset = (p: Pick<WorkloadPreset, 'key' | 'isl' | 'osl' | 'concurrency' | 'prefix'>) => {
@@ -311,8 +344,8 @@ export default function QuickEstimate() {
     // Clear any prior model's config so it can't leak into the next estimate.
     setHfConfig(null);
 
-    // Skip HF fetch only for catalog models — AIC resolves those itself.
-    // Tested models outside the catalog still need their HF config sent along.
+    // Fetch HF config for models not in the catalog, so we can send it to the backend
+    // instead of having the backend try to fetch it from HuggingFace.
     if (!needsHfConfig(model, aicModels)) {
       setIsFetchingConfig(false);
       return;
@@ -367,12 +400,13 @@ export default function QuickEstimate() {
     const timer = setTimeout(async () => {
       try {
         const spec = modelSpecs.get(model)
-        // Check both catalog metadata and HF config for MoE detection
+        // Detect MoE from both catalog metadata and HF config for UI display only
         const catalogExperts = spec?.num_experts ?? 0
         const hfExperts = (hfConfig?.num_experts as number) ?? (hfConfig?.num_local_experts as number) ?? 0
         const isMoe = catalogExperts > 1 || hfExperts > 1
 
-        const result = await fetchEstimateAsInferenceResult({
+        // Build request once for both debug and API call
+        const estimateInput: EstimateAdapterInput = {
           model_path: model,
           system: systemId,
           isl: testISL,
@@ -385,8 +419,6 @@ export default function QuickEstimate() {
           vram_gb: currentAicGpu?.vramGb ?? null,
           gpu_memory_utilization: currentAicGpu?.gpuMemoryUtilization,
           backend_version: backendVersion || undefined,
-          // Only send the config for models AIC can't resolve itself; guards
-          // against a stale config from a previously selected model.
           hf_model_config: needsHfConfig(model, aicModels) ? (hfConfig as Record<string, unknown> | null) : null,
           kvcache_quant_mode: testKVCachePrecision === 'FP8' ? 'fp8' :
                              testKVCachePrecision === 'NVFP4' ? 'nvfp4' : null,
@@ -396,17 +428,30 @@ export default function QuickEstimate() {
                           testWeightPrecision === 'MXFP4' ? 'mxfp4' :
                           testWeightPrecision === 'NVFP4' ? 'nvfp4' : null,
           moe_quant_mode: isMoe ? testMoeQuantMode : undefined,
-          ...(isMoe && { moe_ep_size: testTpSize }),
+          moe_ep_size: testMoeEpSize,
+          moe_tp_size: testMoeEtpSize,
           ...(servingMode === 'disagg' && {
             mode: 'disagg' as const,
             prefill: parsePerfPhase(prefillCfg),
             decode: parsePerfPhase(decodeCfg),
           }),
-        });
+        };
+
+        setDebugRequest(estimateInput as unknown as Record<string, unknown>);
+
+        const response = await fetchEstimateAsInferenceResult(estimateInput, true);
+
+        const result = 'result' in response ? response.result : response;
         if (!cancelled) {
           setTestResult(result);
           setTestError(null);
           setTestErrorCode(null);
+          if ('debugRequest' in response) {
+            setDebugRequest(response.debugRequest);
+            setDebugResponse(response.debugResponse);
+            setDebugStatus(response.debugStatus);
+            setDebugDuration(response.debugDuration);
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -551,6 +596,12 @@ export default function QuickEstimate() {
   const realKVPerReqMB = testResult && testResult.memory_analysis.kv_cache_used_gb ?
     (testResult.memory_analysis.kv_cache_used_gb / testConcurrentUsers) * 1000 : // Convert GB to MB
     0;
+
+  // Detect MoE for UI display
+  const spec = modelSpecs.get(model)
+  const catalogExperts = spec?.num_experts ?? 0
+  const hfExperts = (hfConfig?.text_config?.num_experts as number) ?? (hfConfig?.num_experts as number) ?? (hfConfig?.num_local_experts as number) ?? 0
+  const isMoe = catalogExperts > 1 || hfExperts > 1
 
   // Use live pricing if available, fallback to estimated pricing from hardware cost
   const currentAicGpu = aicGpus.find(g => g.systemId === gpu);
@@ -984,6 +1035,12 @@ export default function QuickEstimate() {
       summary: [
         { k: 'TP', v: `${testTpSize}` },
         { k: 'PP', v: `${testPpSize}` },
+        ...(isMoe
+          ? [
+              { k: 'EP', v: `${testMoeEpSize}` },
+              { k: 'ETP', v: `${testMoeEtpSize}` },
+            ]
+          : []),
       ],
       fields: [
         {
@@ -1003,6 +1060,24 @@ export default function QuickEstimate() {
           type: 'number' as const,
           invalid: invalidPpSize,
           onChange: (val: string) => handlePpSizeChange(val),
+        },
+        {
+          label: 'MoE expert parallel (EP)',
+          value: moeEpSizeInput,
+          term: 'moeExpertParallel',
+          readonly: false,
+          type: 'number' as const,
+          placeholder: 'Optional',
+          onChange: (val: string) => handleMoeEpSizeChange(val),
+        },
+        {
+          label: 'MoE tensor parallel (ETP)',
+          value: moeEtpSizeInput,
+          term: 'moeTensorParallel',
+          readonly: false,
+          type: 'number' as const,
+          placeholder: 'Optional',
+          onChange: (val: string) => handleMoeEtpSizeChange(val),
         },
         {
           label: 'Total GPUs',
@@ -1283,7 +1358,6 @@ export default function QuickEstimate() {
               {testErrorCode === 'OOM' ? 'Not enough GPU memory'
                 : testErrorCode === 'AUTH_REQUIRED' ? 'Authentication required'
                 : testErrorCode === 'MODEL_NOT_FOUND' ? 'Model not found'
-                : testErrorCode === 'MOE_PARAMS_REQUIRED' ? 'MoE model — expert parallelism required'
                 : testErrorCode === 'AIC_TIMEOUT' ? 'Request timed out'
                 : testErrorCode === 'AIC_UNAVAILABLE' ? 'Sizing service unavailable'
                 : 'Estimate failed'}
@@ -1306,10 +1380,6 @@ export default function QuickEstimate() {
                   <li>Get a token at <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener" style={{ color: '#0066cc' }}>huggingface.co/settings/tokens</a></li>
                   <li>Accept the model&apos;s license on HuggingFace first</li>
                 </ul>
-              </div>
-            ) : testErrorCode === 'MOE_PARAMS_REQUIRED' ? (
-              <div style={{ fontSize: '14px', color: '#664d03', lineHeight: '1.6' }}>
-                This is a Mixture-of-Experts (MoE) model. Add your HuggingFace token above so the model config can be loaded — expert parallelism will then be configured automatically.
               </div>
             ) : testErrorCode === 'AIC_TIMEOUT' ? (
               <div style={{ fontSize: '14px', color: '#664d03', lineHeight: '1.6' }}>
@@ -1347,14 +1417,19 @@ export default function QuickEstimate() {
             dark
           front={
             <>
-              <span className={styles.tileLabel}><MicrochipIcon /> GPUs required</span>
-              <span className={styles.tileValue}>{Math.round(gpus)}<span className={styles.tileUnit}>× {gpu}</span></span>
+              <span className={styles.tileLabel}>
+                <MicrochipIcon /> GPUs required
+                <Label isCompact color={isDisagg ? 'purple' : 'blue'} style={{ marginLeft: 'auto' }}>
+                  {isDisagg ? 'disagg' : 'agg'}
+                </Label>
+              </span>
+              <span className={styles.tileValue}>{Math.round(gpus)}<span className={styles.tileUnit}>× {currentAicGpu?.label || gpu}</span></span>
               <span className={styles.tileSub}>
                 {testResult ? (
                   isDisagg ? (
-                    <>disagg · prefill {disagg.prefill.workers}×{disagg.prefill.gpusPerWorker} + decode {disagg.decode.workers}×{disagg.decode.gpusPerWorker} · {testConcurrentUsers} concurrent users</>
+                    <>{testResult.memory_analysis.replicas} replica{testResult.memory_analysis.replicas > 1 ? 's' : ''} × {Math.round(gpus) / testResult.memory_analysis.replicas} GPUs/replica · {testResult.performance?.concurrency || testConcurrentUsers} concurrent users</>
                   ) : (
-                    <>TP={testResult.memory_analysis.tp_size}{testResult.parallelism_strategy.pp_size > 1 ? ` × PP=${testResult.parallelism_strategy.pp_size}` : ''} × {testResult.memory_analysis.replicas} replica{testResult.memory_analysis.replicas > 1 ? 's' : ''} · {testConcurrentUsers} concurrent users</>
+                    <>TP={testResult.memory_analysis.tp_size}{testResult.parallelism_strategy.pp_size > 1 ? ` · PP=${testResult.parallelism_strategy.pp_size}` : ''} · {testResult.memory_analysis.replicas} replica{testResult.memory_analysis.replicas > 1 ? 's' : ''} · {testResult.performance?.concurrency || testConcurrentUsers} concurrent users</>
                   )
                 ) : (
                   <>Configure workload below to see results</>
@@ -1650,6 +1725,102 @@ export default function QuickEstimate() {
         </div>
         )}
       </div>
+      )}
+
+      {/* ---------- Estimated serving performance ---------- */}
+      {testResult && testResult.performance && (
+        <div className={styles.card} style={{ marginBottom: 20 }}>
+          <Accordion>
+            <AccordionItem>
+              <AccordionToggle
+                id="perf-toggle"
+                onClick={() => setExpanded(
+                  expanded.includes('perf') ? expanded.filter(e => e !== 'perf') : [...expanded, 'perf']
+                )}
+                isExpanded={expanded.includes('perf')}
+              >
+                <span style={{ fontWeight: 600 }}>Estimated serving performance</span>
+              </AccordionToggle>
+              <AccordionContent isHidden={!expanded.includes('perf')}>
+                <div className={styles.cardBody}>
+                  <div className={styles.paramGrid}>
+                    <div>
+                      <div className={styles.fieldLabel}>Request latency</div>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700 }}>
+                        {(testResult.performance.request_latency_ms / 1000).toFixed(1)}s
+                      </div>
+                      <div style={{ fontSize: 13, color: '#3c3f42', marginTop: 4 }}>
+                        End-to-end for {testOSL} output tokens
+                      </div>
+                    </div>
+                    <div>
+                      <div className={styles.fieldLabel}>Concurrency</div>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700 }}>
+                        {testResult.performance.concurrency}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#3c3f42', marginTop: 4 }}>
+                        Concurrent users supported
+                      </div>
+                    </div>
+                    <div>
+                      <div className={styles.fieldLabel}>TPOT</div>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 20, fontWeight: 700 }}>
+                        {testResult.performance.tpot_ms.toFixed(1)} ms
+                      </div>
+                      <div style={{ fontSize: 13, color: '#3c3f42', marginTop: 4 }}>
+                        Time per output token
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
+      )}
+
+      {/* ---------- Disaggregated pools ---------- */}
+      {testResult && isDisagg && testResult.disagg && (
+        <div className={styles.card} style={{ marginBottom: 20 }}>
+          <div className={styles.cardHead} style={{ paddingBottom: 0 }}>
+            <span className={styles.cardTitle}>Disaggregated pools</span>
+            <span style={{ fontSize: 13, color: '#3c3f42', marginLeft: 'auto' }}>
+              {testResult.disagg.prefill.workers * testResult.disagg.prefill.gpusPerWorker} prefill GPUs + {testResult.disagg.decode.workers * testResult.disagg.decode.gpusPerWorker} decode GPUs
+            </span>
+          </div>
+          <div className={styles.cardBody}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {/* Prefill pool */}
+              <div style={{ padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#3c3f42', marginBottom: 12 }}>
+                  Prefill pool
+                </div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 28, fontWeight: 700, lineHeight: 1, marginBottom: 8 }}>
+                  {testResult.disagg.prefill.workers * testResult.disagg.prefill.gpusPerWorker}
+                  <span style={{ fontSize: 16, fontWeight: 600, color: '#3c3f42', marginLeft: 4 }}>GPUs</span>
+                </div>
+                <div style={{ fontSize: 13, color: '#3c3f42' }}>
+                  {testResult.disagg.prefill.workers} worker{testResult.disagg.prefill.workers === 1 ? '' : 's'} × {testResult.disagg.prefill.gpusPerWorker} GPU/worker<br/>
+                  TP{testResult.disagg.prefill.tp_size} · PP{testResult.disagg.prefill.pp_size} · batch {testResult.disagg.prefill.batch_size}
+                </div>
+              </div>
+              {/* Decode pool */}
+              <div style={{ padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', color: '#3c3f42', marginBottom: 12 }}>
+                  Decode pool
+                </div>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 28, fontWeight: 700, lineHeight: 1, marginBottom: 8 }}>
+                  {testResult.disagg.decode.workers * testResult.disagg.decode.gpusPerWorker}
+                  <span style={{ fontSize: 16, fontWeight: 600, color: '#3c3f42', marginLeft: 4 }}>GPUs</span>
+                </div>
+                <div style={{ fontSize: 13, color: '#3c3f42' }}>
+                  {testResult.disagg.decode.workers} worker{testResult.disagg.decode.workers === 1 ? '' : 's'} × {testResult.disagg.decode.gpusPerWorker} GPU/worker<br/>
+                  TP{testResult.disagg.decode.tp_size} · PP{testResult.disagg.decode.pp_size} · batch {testResult.disagg.decode.batch_size}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ---------- Why this GPU count (agg only) ---------- */}
@@ -2041,16 +2212,17 @@ export default function QuickEstimate() {
           </span>
         </div>
       )}
-      <div className={styles.apiPreview}>
-        <Button variant="link" isInline onClick={() => setShowApi((s) => !s)}>
-          {showApi ? 'Hide' : 'Preview'} API request body
-        </Button>
-        {showApi && (
-          <pre className={styles.apiBody}>
-            {JSON.stringify(buildEstimateRequestBody(), null, 2)}
-          </pre>
-        )}
-      </div>
+
+      {/* Debug panel */}
+      <DebugPanel
+        request={debugRequest}
+        response={debugResponse}
+        status={debugStatus}
+        duration={debugDuration}
+        open={debugOpen}
+        onToggle={setDebugOpen}
+        endpoint="POST /api/estimate"
+      />
     </div>
   );
 }

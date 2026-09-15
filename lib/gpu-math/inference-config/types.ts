@@ -107,11 +107,20 @@ export interface EstimatePhase {
   memory_gb: number | null
 }
 
+export interface PerformanceMetrics {
+  ttft_ms: number  // Time to first token (prefill latency)
+  tpot_ms: number  // Time per output token (decode latency)
+  request_latency_ms: number  // Full request latency (ttft + tpot * osl)
+  throughput_tokens_per_sec: number
+  concurrency: number  // Max concurrent users
+}
+
 export interface InferenceConfigResult {
   memory_analysis: MemoryAnalysis
   vllm_config: VLLMConfig
   parallelism_strategy: ParallelismStrategy
   bottleneck_analysis: BottleneckAnalysis
+  performance?: PerformanceMetrics
   llmd_config?: LLMDConfig
   /** Serving mode. Defaults to 'agg' when absent. */
   mode?: 'agg' | 'disagg'

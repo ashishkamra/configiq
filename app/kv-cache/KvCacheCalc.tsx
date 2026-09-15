@@ -13,6 +13,7 @@ import { ComboBox, type ComboBoxItem } from '@/components/ModelComboBox/ModelCom
 import { buildModelItems, needsHfConfig } from '@/lib/model-options';
 import { fetchModelConfig } from '@/lib/huggingface/fetch-config';
 import { GpuSystemInput } from '@/components/ui/GpuSystemInput'
+import { DebugPanel } from '@/components/DebugPanel/DebugPanel'
 import type { KvCacheCalcResult } from '@/lib/api/kv-cache-calc'
 import styles from './KvCacheCalc.module.css'
 
@@ -99,8 +100,8 @@ export default function KvCacheCalc() {
   const [results, setResults] = React.useState<PhaseResult[]>([])
   const [error, setError] = React.useState<string | null>(null)
   const [debugOpen, setDebugOpen] = React.useState(false)
-  const [debugRequest, setDebugRequest] = React.useState<unknown>(null)
-  const [debugResponse, setDebugResponse] = React.useState<unknown>(null)
+  const [debugRequest, setDebugRequest] = React.useState<Record<string, unknown> | Record<string, unknown>[] | null>(null)
+  const [debugResponse, setDebugResponse] = React.useState<Record<string, unknown> | Record<string, unknown>[] | null>(null)
   const [debugStatus, setDebugStatus] = React.useState<number | null>(null)
   const [debugDuration, setDebugDuration] = React.useState<number | null>(null)
 
@@ -504,53 +505,25 @@ export default function KvCacheCalc() {
       {/* Results — one section per pool (agg = single unlabelled pool) */}
       {results.length > 0 && !loading && (
         <>
-          {results.map(({ label, result }) => (
-            <PhaseResults key={label || 'agg'} label={label} result={result} />
-          ))}
+          {results.map(({ label, result }) => {
+            const currentGpu = aicGpus.find(g => g.systemId === result.metadata.system)
+            return (
+              <PhaseResults key={label || 'agg'} label={label} result={result} gpuLabel={currentGpu?.label} />
+            )
+          })}
         </>
       )}
 
       {/* Debug panel */}
-      {(debugRequest != null || debugResponse != null) && (
-        <div className={styles.debugSection}>
-          <button
-            type="button"
-            className={styles.debugToggle}
-            onClick={() => setDebugOpen(prev => !prev)}
-            aria-expanded={debugOpen}
-          >
-            <span className={styles.debugToggleIcon}>{debugOpen ? '▾' : '▸'}</span>
-            Debug panel
-            {debugStatus !== null && (
-              <span className={`${styles.debugStatusBadge} ${debugStatus >= 200 && debugStatus < 300 ? styles.debugStatusOk : styles.debugStatusErr}`}>
-                {debugStatus}
-              </span>
-            )}
-            {debugDuration !== null && (
-              <span className={styles.debugDuration}>{debugDuration}ms</span>
-            )}
-          </button>
-          {debugOpen && (
-            <div className={styles.debugBody}>
-              <div className={styles.debugPane}>
-                <div className={styles.debugPaneHeader}>Request → POST /api/memory</div>
-                <pre className={styles.debugPre}>
-                  {JSON.stringify(debugRequest, null, 2)}
-                </pre>
-              </div>
-              <div className={styles.debugPane}>
-                <div className={styles.debugPaneHeader}>
-                  Response
-                  {debugStatus !== null && ` (${debugStatus})`}
-                </div>
-                <pre className={styles.debugPre}>
-                  {debugResponse ? JSON.stringify(debugResponse, null, 2) : '(no response)'}
-                </pre>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <DebugPanel
+        request={debugRequest}
+        response={debugResponse}
+        status={debugStatus}
+        duration={debugDuration}
+        open={debugOpen}
+        onToggle={setDebugOpen}
+        endpoint="POST /api/memory"
+      />
     </div>
   )
 }
@@ -609,7 +582,7 @@ function PhaseParallelFields({ title, par, onChange, idPrefix }: {
 }
 
 /** Full result rendering for one pool: tiles + memory breakdown + request detail. */
-function PhaseResults({ label, result }: PhaseResult) {
+function PhaseResults({ label, result, gpuLabel }: PhaseResult & { gpuLabel?: string }) {
   const [flipped, setFlipped] = React.useState<Record<string, boolean>>({})
   const toggleFlip = (id: string) => setFlipped(prev => ({ ...prev, [id]: !prev[id] }))
 
@@ -679,7 +652,7 @@ function PhaseResults({ label, result }: PhaseResult) {
           id="gpu"
           label="GPU memory"
           value={formatBytes(animGpuCap)}
-          sub={`${result.metadata.system} total capacity`}
+          sub={`${gpuLabel || result.metadata.system} total capacity`}
           flipped={flipped.gpu ?? false}
           onFlip={() => toggleFlip('gpu')}
           backContent={

@@ -12,6 +12,7 @@ import ExclamationTriangleIcon from '@patternfly/react-icons/dist/esm/icons/excl
 import CheckCircleIcon from '@patternfly/react-icons/dist/esm/icons/check-circle-icon';
 import DollarSignIcon from '@patternfly/react-icons/dist/esm/icons/dollar-sign-icon';
 import { InfoStrip, InfoStripAction } from '@/components/ui/InfoStrip';
+import { DebugPanel } from '@/components/DebugPanel/DebugPanel';
 
 import styles from './AdvancedEstimate.module.css';
 import { fetchModelConfig } from '@/lib/huggingface/fetch-config';
@@ -866,46 +867,15 @@ export default function AdvancedEstimate() {
       )}
 
       {/* ─── Debug panel ─── */}
-      {(debugRequest || debugResponse) && (
-        <div className={styles.debugSection}>
-          <button
-            type="button"
-            className={styles.debugToggle}
-            onClick={() => setDebugOpen(prev => !prev)}
-            aria-expanded={debugOpen}
-          >
-            <span className={styles.debugToggleIcon}>{debugOpen ? '▾' : '▸'}</span>
-            Debug panel
-            {debugStatus !== null && (
-              <span className={`${styles.debugStatusBadge} ${debugStatus >= 200 && debugStatus < 300 ? styles.debugStatusOk : styles.debugStatusErr}`}>
-                {debugStatus}
-              </span>
-            )}
-            {debugDuration !== null && (
-              <span className={styles.debugDuration}>{debugDuration}ms</span>
-            )}
-          </button>
-          {debugOpen && (
-            <div className={styles.debugBody}>
-              <div className={styles.debugPane}>
-                <div className={styles.debugPaneHeader}>Request → POST /api/recommend</div>
-                <pre className={styles.debugPre}>
-                  {JSON.stringify(debugRequest, null, 2)}
-                </pre>
-              </div>
-              <div className={styles.debugPane}>
-                <div className={styles.debugPaneHeader}>
-                  Response
-                  {debugStatus !== null && ` (${debugStatus})`}
-                </div>
-                <pre className={styles.debugPre}>
-                  {debugResponse ? JSON.stringify(debugResponse, null, 2) : '(no response)'}
-                </pre>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      <DebugPanel
+        request={debugRequest}
+        response={debugResponse}
+        status={debugStatus}
+        duration={debugDuration}
+        open={debugOpen}
+        onToggle={setDebugOpen}
+        endpoint="POST /api/recommend"
+      />
     </div>
   );
 }

@@ -85,6 +85,15 @@
   margin-bottom: 6px;
 }
 
+/* 3-column parameter grid for Estimated serving performance */
+.paramGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 700px) { .paramGrid { grid-template-columns: 1fr; } }
+
 
 .modelInputWrapper {
   position: relative;
@@ -532,12 +541,6 @@
 /* ---------- footer actions ---------- */
 .footerRow { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; align-items: center; }
 .footerSpacer { flex: 1; }
-.apiPreview { margin-top: 14px; }
-.apiBody {
-  font-family: var(--mono); font-size: 12.5px; line-height: 1.6; color: var(--t2);
-  background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px 16px; overflow-x: auto; white-space: pre; margin: 0;
-}
 
 /* ---------- input field overrides ---------- */
 .inputCard :global(.pf-v5-c-form-control),
