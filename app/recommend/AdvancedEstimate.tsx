@@ -452,7 +452,10 @@ export default function AdvancedEstimate() {
       )}
 
       <InfoStrip>
-        Based on your configuration — ISL {isl}, OSL {osl}, TTFT target {(ttft / 1000).toFixed(3).replace(/\.?0+$/, '')}s{prefix > 0 ? `, prefix ${prefix.toLocaleString()} tokens` : ''}, concurrency {targetConcurrency}, TPOT {tpot} ms.
+        Based on your configuration — ISL {isl}, OSL {osl}, TTFT target {(() => {
+          const sec = (ttft / 1000).toFixed(3);
+          return sec.endsWith('000') ? (ttft / 1000).toFixed(0) : parseFloat(sec).toString();
+        })()}s{prefix > 0 ? `, prefix ${prefix.toLocaleString()} tokens` : ''}, concurrency {targetConcurrency}, TPOT {tpot} ms.
         {' '}<InfoStripAction onClick={() => setExpanded(expanded.includes('customize') ? expanded.filter(e => e !== 'customize') : [...expanded, 'customize'])}>
           Adjust? (edit fields below)
         </InfoStripAction>
