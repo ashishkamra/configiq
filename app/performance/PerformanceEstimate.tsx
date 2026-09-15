@@ -438,6 +438,9 @@ export default function QuickEstimate() {
         };
 
         setDebugRequest(estimateInput as unknown as Record<string, unknown>);
+        setDebugResponse(null);
+        setDebugStatus(null);
+        setDebugDuration(null);
 
         const response = await fetchEstimateAsInferenceResult(estimateInput, true);
 
@@ -731,7 +734,7 @@ export default function QuickEstimate() {
         ? (hfConfig as Record<string, unknown> | null)
         : null,
       moe_quant_mode: isMoe ? testMoeQuantMode : undefined,
-      ...(isMoe && { moe_ep_size: testTpSize }),
+      ...(isMoe && { moe_ep_size: testMoeEpSize, moe_tp_size: testMoeEtpSize }),
       ...(servingMode === 'disagg' && {
         mode: 'disagg',
         prefill_tp_size: parsePerfPhase(prefillCfg).tp,
@@ -744,7 +747,7 @@ export default function QuickEstimate() {
         decode_batch_size: parsePerfPhase(decodeCfg).batch,
       })
     };
-  }, [model, gpu, inferenceBackend, testISL, testOSL, testConcurrentUsers, testResult, testTpSize, testPpSize, currentAicGpu, testPrefix, backendVersion, testWeightPrecision, testKVCachePrecision, servingMode, prefillCfg, decodeCfg, modelSpecs, hfConfig, aicModels, testMoeQuantMode]);
+  }, [model, gpu, inferenceBackend, testISL, testOSL, testConcurrentUsers, testResult, testTpSize, testPpSize, currentAicGpu, testPrefix, backendVersion, testWeightPrecision, testKVCachePrecision, servingMode, prefillCfg, decodeCfg, modelSpecs, hfConfig, aicModels, testMoeQuantMode, testMoeEpSize, testMoeEtpSize]);
 
   // Copy API request body to clipboard
   const handleCopyAPIRequest = async () => {

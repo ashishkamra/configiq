@@ -203,15 +203,19 @@ export async function fetchEstimateAsInferenceResult(
     ? { prefill: buildPhase(data.prefill_config, input.prefill!), decode: buildPhase(data.decode_config, input.decode!) }
     : undefined
 
+  const ttft = data.ttft ?? 0
+  const tpot = data.tpot ?? 0
+  const hasTiming = Number.isFinite(ttft) && Number.isFinite(tpot)
+
   const warnings: string[] = hasBreakdown ? [] : ['Memory breakdown estimated (no backend_version specified).']
   if (input.mode === 'disagg' && !isDisagg) {
     warnings.push('Disaggregated mode was requested but the backend returned an aggregated estimate.')
   }
-
-  const ttft = data.ttft ?? 0
-  const tpot = data.tpot ?? 0
-  const requestLatency = ttft + tpot * input.osl
-  const throughput = input.osl > 0 && requestLatency > 0 ? (input.osl * 1000) / requestLatency : 0
+  if (!hasTiming) {
+    warnings.push('Timing metrics (TTFT, TPOT) missing or non-finite; performance estimates unavailable.')
+  }
+  const requestLatency = hasTiming ? ttft + tpot * input.osl : 0
+  const throughput = hasTiming && input.osl > 0 && requestLatency > 0 ? (input.osl * 1000) / requestLatency : 0
   const concurrency = Math.max(0, Math.floor(maxNumSeqs))
 
   const result: InferenceConfigResult = {
