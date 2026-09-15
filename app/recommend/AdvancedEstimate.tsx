@@ -506,56 +506,40 @@ export default function AdvancedEstimate() {
               </div>
             </div>
 
-            {/* Additional constraints */}
-            <Accordion style={{ marginTop: 12 }}>
-              <AccordionItem>
-                <AccordionToggle
-                  id="constraints-toggle"
-                  onClick={() => setExpanded(
-                    expanded.includes('constraints') ? expanded.filter(e => e !== 'constraints') : [...expanded, 'constraints']
-                  )}
-                  isExpanded={expanded.includes('constraints')}
-                >
-                  Additional constraints (optional)
-                </AccordionToggle>
-                <AccordionContent isHidden={!expanded.includes('constraints')}>
-                  <div className={styles.paramGrid} style={{ marginTop: 8, gridTemplateColumns: 'repeat(3, 1fr)' }}>
-                    <div>
-                      <label className={styles.fieldLabel}>Target concurrency <Term k="concurrent" /></label>
-                      <input
-                        type="number"
-                        className={invalidConcurrency ? styles.paramInputInvalid : styles.paramInput}
-                        value={concurrencyInput}
-                        onChange={e => handleConcurrencyChange(e.target.value)}
-                        min={1}
-                      />
-                    </div>
-                    <div>
-                      <label className={styles.fieldLabel}>Max TPOT (ms) <Term k="tpot" /></label>
-                      <input
-                        type="number"
-                        className={invalidTpot ? styles.paramInputInvalid : styles.paramInput}
-                        value={tpotInput}
-                        onChange={e => handleTpotChange(e.target.value)}
-                        min={0.1}
-                        step={0.1}
-                      />
-                    </div>
-                    <div>
-                      <label className={styles.fieldLabel}>Max E2E latency (ms) <Term k="requestLatency" /></label>
-                      <input
-                        type="number"
-                        className={invalidLatency ? styles.paramInputInvalid : styles.paramInput}
-                        value={latencyInput}
-                        onChange={e => handleLatencyChange(e.target.value)}
-                        placeholder="Auto"
-                        min={1}
-                      />
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+            <div className={styles.paramGrid} style={{ marginTop: 12, gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div>
+                <label className={styles.fieldLabel}>Target concurrency <Term k="concurrent" /></label>
+                <input
+                  type="number"
+                  className={invalidConcurrency ? styles.paramInputInvalid : styles.paramInput}
+                  value={concurrencyInput}
+                  onChange={e => handleConcurrencyChange(e.target.value)}
+                  min={1}
+                />
+              </div>
+              <div>
+                <label className={styles.fieldLabel}>Max TPOT (ms) <Term k="tpot" /></label>
+                <input
+                  type="number"
+                  className={invalidTpot ? styles.paramInputInvalid : styles.paramInput}
+                  value={tpotInput}
+                  onChange={e => handleTpotChange(e.target.value)}
+                  min={0.1}
+                  step={0.1}
+                />
+              </div>
+              <div>
+                <label className={styles.fieldLabel}>Max E2E latency (ms) <Term k="requestLatency" /></label>
+                <input
+                  type="number"
+                  className={invalidLatency ? styles.paramInputInvalid : styles.paramInput}
+                  value={latencyInput}
+                  onChange={e => handleLatencyChange(e.target.value)}
+                  placeholder="Auto"
+                  min={1}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
