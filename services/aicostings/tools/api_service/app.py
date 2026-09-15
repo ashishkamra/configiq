@@ -22,7 +22,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .scrapers.cloud_rates import active_scrapers, scrape_all_cloud_rates
+from .scrapers.cloud_rates import scrape_all_cloud_rates
 from .scrapers.hardware_costs import load_hardware_costs
 from .scrapers.models import LITELLM_URL, OPENROUTER_URL, scrape_all_models
 from .valkey import ValkeyStore
@@ -177,25 +177,25 @@ async def lifespan(app: FastAPI):
     global _DEVICE_DISPLAY_NAMES
     _DEVICE_DISPLAY_NAMES = load_device_names_from_perf_data()
 
-    # Initial data load, per dataset. Checking is_empty() alone is not enough:
-    # data keys carry a TTL but the scrape:last:* markers do not, so after a
-    # restart a dataset can be missing (expired) while the DB is non-empty. Load
-    # anything that is absent or already stale so a restart self-heals instead of
-    # serving stale/empty data until the next scheduled tick.
-    if store.get_models() is None or (_stale_flag("models.openrouter") and _stale_flag("models.litellm")):
+    # Unconditionally refresh all datasets on startup. This ensures fresh data
+    # after every container restart, avoiding edge cases where data TTL expires
+    # between restart and scheduler's first job run. Startup latency (30-40s)
+    # is acceptable; restarts are infrequent. Failures are logged but don't
+    # block startup — the scheduler will retry within 24h and /health reports staleness.
+    try:
         await job_scrape_models()
-    # Re-scrape if cloud rate data is missing, or if ANY active provider is stale
-    # or has never succeeded. Keying on a single provider (previously azure) hid
-    # the case where one provider is broken while others are fresh: e.g. a
-    # never-succeeded provider has no scrape marker, so _stale_flag() is True and
-    # a restart re-scrapes it instead of waiting up to 24h for the next tick.
-    cloud_sources = [f"cloud.{name}" for name, _ in active_scrapers()]
-    if not store.get_all_cloud_rates() or any(_stale_flag(s) for s in cloud_sources):
+    except Exception as e:
+        logger.error("Startup scrape_models failed: %s", e)
+    try:
         await job_scrape_cloud_rates()
-    if not store.get_all_hardware_costs() or store.is_stale("hardware_costs", 7 * 24 * 3600):
+    except Exception as e:
+        logger.error("Startup scrape_cloud_rates failed: %s", e)
+    try:
         await job_load_hardware_costs()
+    except Exception as e:
+        logger.error("Startup load_hardware_costs failed: %s", e)
 
-    # Start scheduler
+    # Start scheduler for periodic refreshes
     scheduler = AsyncIOScheduler()
     scheduler.add_job(job_scrape_models, IntervalTrigger(hours=24), id="scrape_models")
     scheduler.add_job(job_scrape_cloud_rates, IntervalTrigger(hours=24), id="scrape_cloud_rates")
