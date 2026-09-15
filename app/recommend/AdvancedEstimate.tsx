@@ -452,7 +452,10 @@ export default function AdvancedEstimate() {
       )}
 
       <InfoStrip>
-        Based on your configuration — ISL {isl.toLocaleString()}, OSL {osl}, TTFT target {(ttft / 1000).toFixed(3)}s{prefix > 0 ? `, prefix ${prefix.toLocaleString()} tokens` : ''}, concurrency {targetConcurrency}, TPOT {tpot} ms.
+        Based on your configuration — ISL {isl}, OSL {osl}, TTFT target {(() => {
+          const sec = (ttft / 1000).toFixed(3);
+          return sec.endsWith('000') ? (ttft / 1000).toFixed(0) : parseFloat(sec).toString();
+        })()}s{prefix > 0 ? `, prefix ${prefix.toLocaleString()} tokens` : ''}, concurrency {targetConcurrency}, TPOT {tpot} ms.
         {' '}<InfoStripAction onClick={() => setExpanded(expanded.includes('customize') ? expanded.filter(e => e !== 'customize') : [...expanded, 'customize'])}>
           Adjust? (edit fields below)
         </InfoStripAction>
@@ -506,56 +509,40 @@ export default function AdvancedEstimate() {
               </div>
             </div>
 
-            {/* Additional constraints */}
-            <Accordion style={{ marginTop: 12 }}>
-              <AccordionItem>
-                <AccordionToggle
-                  id="constraints-toggle"
-                  onClick={() => setExpanded(
-                    expanded.includes('constraints') ? expanded.filter(e => e !== 'constraints') : [...expanded, 'constraints']
-                  )}
-                  isExpanded={expanded.includes('constraints')}
-                >
-                  Additional constraints (optional)
-                </AccordionToggle>
-                <AccordionContent isHidden={!expanded.includes('constraints')}>
-                  <div className={styles.paramGrid} style={{ marginTop: 8, gridTemplateColumns: 'repeat(3, 1fr)' }}>
-                    <div>
-                      <label className={styles.fieldLabel}>Target concurrency <Term k="concurrent" /></label>
-                      <input
-                        type="number"
-                        className={invalidConcurrency ? styles.paramInputInvalid : styles.paramInput}
-                        value={concurrencyInput}
-                        onChange={e => handleConcurrencyChange(e.target.value)}
-                        min={1}
-                      />
-                    </div>
-                    <div>
-                      <label className={styles.fieldLabel}>Max TPOT (ms) <Term k="tpot" /></label>
-                      <input
-                        type="number"
-                        className={invalidTpot ? styles.paramInputInvalid : styles.paramInput}
-                        value={tpotInput}
-                        onChange={e => handleTpotChange(e.target.value)}
-                        min={0.1}
-                        step={0.1}
-                      />
-                    </div>
-                    <div>
-                      <label className={styles.fieldLabel}>Max E2E latency (ms) <Term k="requestLatency" /></label>
-                      <input
-                        type="number"
-                        className={invalidLatency ? styles.paramInputInvalid : styles.paramInput}
-                        value={latencyInput}
-                        onChange={e => handleLatencyChange(e.target.value)}
-                        placeholder="Auto"
-                        min={1}
-                      />
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+            <div className={styles.paramGrid} style={{ marginTop: 12, gridTemplateColumns: 'repeat(3, 1fr)' }}>
+              <div>
+                <label className={styles.fieldLabel}>Target concurrency <Term k="concurrent" /></label>
+                <input
+                  type="number"
+                  className={invalidConcurrency ? styles.paramInputInvalid : styles.paramInput}
+                  value={concurrencyInput}
+                  onChange={e => handleConcurrencyChange(e.target.value)}
+                  min={1}
+                />
+              </div>
+              <div>
+                <label className={styles.fieldLabel}>Max TPOT (ms) <Term k="tpot" /></label>
+                <input
+                  type="number"
+                  className={invalidTpot ? styles.paramInputInvalid : styles.paramInput}
+                  value={tpotInput}
+                  onChange={e => handleTpotChange(e.target.value)}
+                  min={0.1}
+                  step={0.1}
+                />
+              </div>
+              <div>
+                <label className={styles.fieldLabel}>Max E2E latency (ms) <Term k="requestLatency" /></label>
+                <input
+                  type="number"
+                  className={invalidLatency ? styles.paramInputInvalid : styles.paramInput}
+                  value={latencyInput}
+                  onChange={e => handleLatencyChange(e.target.value)}
+                  placeholder="Auto"
+                  min={1}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
