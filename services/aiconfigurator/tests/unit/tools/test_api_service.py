@@ -204,6 +204,27 @@ class TestRecommend:
         assert resp.json()["configs"][0]["tpot"] == pytest.approx(28.118)
 
     @patch("tools.api_service.app.cli_recommend")
+    def test_inclusive_tpot_preserves_missing_ttft(self, mock_recommend):
+        # A row without ttft cannot be transformed; tpot is returned unchanged
+        # rather than raising a TypeError on None arithmetic.
+        mock_recommend.return_value = make_mock_cli_result(rows=[{**MOCK_ROW, "ttft": np.nan}])
+        body = {**VALID_RECOMMEND_BODY, "inclusive_tpot": True}
+        resp = client.post("/recommend", json=body)
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        assert cfg["ttft"] is None
+        assert cfg["tpot"] == pytest.approx(28.118)
+
+    @patch("tools.api_service.app.cli_recommend")
+    def test_inclusive_tpot_preserves_missing_tpot(self, mock_recommend):
+        # A row without tpot keeps the unavailable None value under inclusive_tpot.
+        mock_recommend.return_value = make_mock_cli_result(rows=[{**MOCK_ROW, "tpot": np.nan}])
+        body = {**VALID_RECOMMEND_BODY, "inclusive_tpot": True}
+        resp = client.post("/recommend", json=body)
+        assert resp.status_code == 200
+        assert resp.json()["configs"][0]["tpot"] is None
+
+    @patch("tools.api_service.app.cli_recommend")
     def test_no_serving_config_by_default(self, mock_recommend):
         mock_recommend.return_value = make_mock_cli_result()
         resp = client.post("/recommend", json=VALID_RECOMMEND_BODY)
