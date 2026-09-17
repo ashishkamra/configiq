@@ -186,6 +186,24 @@ class TestRecommend:
         assert cfg["gemm"] == "bfloat16"
 
     @patch("tools.api_service.app.cli_recommend")
+    def test_inclusive_tpot(self, mock_recommend):
+        mock_recommend.return_value = make_mock_cli_result()
+        body = {**VALID_RECOMMEND_BODY, "inclusive_tpot": True}
+        resp = client.post("/recommend", json=body)
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        # inclusive = (ttft + tpot * (osl - 1)) / osl
+        expected = (471.378 + 28.118 * (1000 - 1)) / 1000
+        assert cfg["tpot"] == pytest.approx(expected)
+        assert cfg["ttft"] == pytest.approx(471.378)
+
+    @patch("tools.api_service.app.cli_recommend")
+    def test_inclusive_tpot_default_false(self, mock_recommend):
+        mock_recommend.return_value = make_mock_cli_result()
+        resp = client.post("/recommend", json=VALID_RECOMMEND_BODY)
+        assert resp.json()["configs"][0]["tpot"] == pytest.approx(28.118)
+
+    @patch("tools.api_service.app.cli_recommend")
     def test_no_serving_config_by_default(self, mock_recommend):
         mock_recommend.return_value = make_mock_cli_result()
         resp = client.post("/recommend", json=VALID_RECOMMEND_BODY)

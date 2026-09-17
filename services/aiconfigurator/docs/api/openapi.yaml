@@ -326,6 +326,13 @@ components:
           default: 5
           minimum: 1
           maximum: 20
+        inclusive_tpot:
+          type: boolean
+          description: |
+            Report TPOT as (ttft + tpot * (osl - 1)) / osl, spreading TTFT across all
+            output tokens. Useful for comparing with benchmarks that report inclusive
+            TPOT (e.g. GuideLLM).
+          default: false
         model_config:
           type: object
           nullable: true

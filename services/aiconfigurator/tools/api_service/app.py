@@ -67,6 +67,11 @@ class RecommendRequest(BaseModel):
     prefix: int = Field(default=0, description="Prefix cache length.")
     database_mode: str = Field(default="HYBRID", description="Perf database mode.")
     top_n: int = Field(default=5, ge=1, le=20, examples=[2], description="Number of configs to return.")
+    inclusive_tpot: bool = Field(
+        default=False,
+        description="Report TPOT as (ttft + tpot * (osl - 1)) / osl, spreading TTFT across all output tokens. "
+        "Useful for comparing with benchmarks that report inclusive TPOT (e.g. GuideLLM).",
+    )
     model_config_data: dict | None = Field(
         default=None,
         alias="model_config",
@@ -384,6 +389,17 @@ def _coerce_float(val: Any) -> float | None:
         return None
 
 
+def _inclusive_tpot(ttft: float | None, tpot: float | None, osl: int) -> float | None:
+    """Spread TTFT across all output tokens: (ttft + tpot * (osl - 1)) / osl.
+
+    Presentation-only transform for benchmark-comparable TPOT (e.g. GuideLLM).
+    Returns ``tpot`` unchanged when inputs are insufficient.
+    """
+    if ttft is None or tpot is None or osl <= 0:
+        return tpot
+    return (ttft + tpot * (osl - 1)) / osl
+
+
 def _worker_config_from_row(row: pd.Series, prefix: str, req: RecommendRequest) -> WorkerConfig | None:
     def g(col: str) -> Any:
         v = row.get(f"({prefix}){col}")
@@ -661,6 +677,8 @@ def post_recommend(
     with _with_model_config(req.model_path, req.model_config_data) as effective_path:
         for _, row in best.head(req.top_n).iterrows():
             cfg = _row_to_config(row, req)
+            if req.inclusive_tpot:
+                cfg.tpot = _inclusive_tpot(cfg.ttft, cfg.tpot, req.osl)
             backend = cfg.backend or req.backend
             bv = cfg.backend_version or req.backend_version
 
@@ -778,8 +796,8 @@ def post_estimate(
     includes = _parse_include(include)
 
     tpot = result.tpot
-    if req.inclusive_tpot and req.osl > 0:
-        tpot = (result.ttft + tpot * (req.osl - 1)) / req.osl
+    if req.inclusive_tpot:
+        tpot = _inclusive_tpot(result.ttft, tpot, req.osl)
 
     resp = EstimateResponse(
         ttft=result.ttft,
