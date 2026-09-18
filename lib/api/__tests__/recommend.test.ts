@@ -126,7 +126,7 @@ describe('RecommendRequestSchema', () => {
 
 describe('callRecommend', () => {
   beforeEach(() => {
-    vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'https://aiconfigurator.dev')
+    vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'https://aisimulators.dev')
   })
 
   afterEach(() => {
@@ -167,7 +167,7 @@ describe('callRecommend', () => {
 
     await callRecommend(VALID_REQUEST)
 
-    expect(mockFetch.mock.calls[0][0]).toBe('https://aiconfigurator.dev/recommend')
+    expect(mockFetch.mock.calls[0][0]).toBe('https://aisimulators.dev/recommend')
   })
 
   it('sends correct fields in the upstream request', async () => {

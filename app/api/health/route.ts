@@ -20,7 +20,7 @@ export async function GET() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-    // Check if AIConfigurator API is reachable via gateway
+    // Check if AISimulators API is reachable via gateway
     const apiResponse = await fetch(`${gatewayUrl}/systems`, {
       method: 'GET',
       headers: {

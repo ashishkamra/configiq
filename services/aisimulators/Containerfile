@@ -15,7 +15,7 @@ FROM python:3.12-slim
 
 # Link the GHCR package to this repo (configiq), not the SDK-wheels fork whose
 # name it shares. Set on package creation; add here so future publishes resolve
-# to configiq/packages rather than redhat-performance/aiconfigurator.
+# to configiq/packages rather than redhat-performance/aisimulators.
 LABEL org.opencontainers.image.source=https://github.com/redhat-performance/configiq
 
 WORKDIR /app
@@ -37,7 +37,7 @@ COPY configiq-py /src/configiq-py
 RUN /opt/venv/bin/pip install --no-cache-dir "/src/configiq-py[otel,mcp]"
 
 # Runtime deps, read from pyproject.toml (single source of truth) by the shared
-# installer — incl. the aiconfigurator SDK + its Rust-compiled core, which
+# installer — incl. the aisimulate SDK + its Rust-compiled core, which
 # pyproject.toml references by exact fork-release wheel URL. Copy pyproject.toml
 # alone first so this layer only rebuilds when the deps change. `python` here is
 # the venv's (PATH=/opt/venv/bin), so pip installs into /opt/venv.

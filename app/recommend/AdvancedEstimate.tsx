@@ -171,13 +171,13 @@ function friendlyErrorTitle(code: string | null): string {
 function friendlyErrorMessage(code: string | null, raw: string): string {
   switch (code) {
     case 'AIC_TIMEOUT':
-      return 'The AIConfigurator service took too long to respond. This can happen with complex configurations.';
+      return 'The AISimulators service took too long to respond. This can happen with complex configurations.';
     case 'AIC_NO_CONFIGURATION':
       return 'No valid GPU configuration found for this model and hardware combination.';
     case 'AIC_UNAVAILABLE':
-      return 'The AIConfigurator service is temporarily unreachable. This is usually a transient issue.';
+      return 'The AISimulators service is temporarily unreachable. This is usually a transient issue.';
     case 'AIC_NOT_CONFIGURED':
-      return 'The AIConfigurator service URL is not configured.';
+      return 'The AISimulators service URL is not configured.';
     case 'AIC_INVALID_RESPONSE':
       return 'The sizing engine returned an unexpected response format.';
     case 'INVALID_REQUEST':

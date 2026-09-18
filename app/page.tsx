@@ -25,7 +25,7 @@ const tools = [
   {
     title: "Recommend sizing",
     description:
-      "Find the optimal GPU configuration for a workload target using the AIConfigurator engine.",
+      "Find the optimal GPU configuration for a workload target using the AISimulators engine.",
     href: "/recommend",
     icon: <SlidersHIcon />,
   },

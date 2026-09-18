@@ -12,7 +12,7 @@ export type ServingMode = 'agg' | 'disagg'
 
 /**
  * One worker role in a disaggregated deployment (prefill / decode / encode).
- * `gpusPerWorker` = tp·pp·dp·cp (the aiconfigurator WORKER_GPU_DIMS; for MoE this
+ * `gpusPerWorker` = tp·pp·dp·cp (the aisimulate WORKER_GPU_DIMS; for MoE this
  * already equals etp·ep·pp — expert dims do not add GPUs). A replica's GPU count
  * is the sum of `workers × gpusPerWorker` across all phases.
  */
@@ -102,7 +102,7 @@ export function generateRequestId(): string {
 
 // ─── Phase (disagg worker) parsing ───────────────────────────────────────────
 
-/** Shape of a WorkerConfig as returned by the AIConfigurator gateway. */
+/** Shape of a WorkerConfig as returned by the AISimulators gateway. */
 interface RawWorkerConfig {
   tp?: number | null
   pp?: number | null
@@ -129,7 +129,7 @@ const dim = (v: number | null | undefined): number => (v != null && v > 0 ? v : 
 
 /**
  * GPUs consumed by a single worker = tp·pp·dp·cp. This mirrors the
- * aiconfigurator SDK's WORKER_GPU_DIMS = (tp, pp, dp, cp) exactly and applies to
+ * aisimulate SDK's WORKER_GPU_DIMS = (tp, pp, dp, cp) exactly and applies to
  * both dense and MoE models (for MoE, tp·pp·dp already equals etp·ep·pp; the
  * expert dims do not multiply the GPU count). cp (context parallel) is included
  * — omitting it undercounts prefill pools.
@@ -171,7 +171,7 @@ export async function callRecommend(
   const timeoutSeconds = aicTimeoutSeconds()
 
   if (!baseUrl) {
-    return makeError(requestId, 'AIC_NOT_CONFIGURED', 'AIConfigurator API URL is not configured')
+    return makeError(requestId, 'AIC_NOT_CONFIGURED', 'AISimulators API URL is not configured')
   }
 
   const externalPayload: Record<string, unknown> = {
@@ -207,13 +207,13 @@ export async function callRecommend(
   } catch (err: unknown) {
     const durationMs = Math.round(performance.now() - startTime)
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      return makeError(requestId, 'AIC_TIMEOUT', `The AIConfigurator API did not respond within ${timeoutSeconds} seconds (waited ${durationMs}ms)`)
+      return makeError(requestId, 'AIC_TIMEOUT', `The AISimulators API did not respond within ${timeoutSeconds} seconds (waited ${durationMs}ms)`)
     }
-    return makeError(requestId, 'AIC_UNAVAILABLE', 'AIConfigurator API is unreachable')
+    return makeError(requestId, 'AIC_UNAVAILABLE', 'AISimulators API is unreachable')
   }
 
   if (!response.ok) {
-    let detail = `AIConfigurator API returned HTTP ${response.status}`
+    let detail = `AISimulators API returned HTTP ${response.status}`
     try {
       const body = await response.json()
       if (typeof body.detail === 'string') detail = body.detail
@@ -227,7 +227,7 @@ export async function callRecommend(
   try {
     rawData = await response.json() as Record<string, unknown>
   } catch {
-    return makeError(requestId, 'AIC_INVALID_RESPONSE', 'AIConfigurator API returned non-JSON response')
+    return makeError(requestId, 'AIC_INVALID_RESPONSE', 'AISimulators API returned non-JSON response')
   }
 
   const configs = rawData.configs as Array<Record<string, unknown>> | undefined

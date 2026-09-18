@@ -37,8 +37,8 @@ jobs:
       - name: Build
         run: npm run build
 
-  aiconfigurator:
-    name: aiconfigurator API — lint and test
+  aisimulators:
+    name: aisimulators API — lint and test
     runs-on: ubuntu-latest
 
     steps:

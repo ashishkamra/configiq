@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""AIConfigurator REST API.
+"""AISimulators REST API.
 
-Minimal service wrapping the aiconfigurator SDK for GPU recommendation,
+Minimal service wrapping the aisimulate SDK for GPU recommendation,
 single-point performance estimation, and memory estimation.
 See docs/api/openapi.yaml for the full spec.
 """
@@ -568,7 +568,7 @@ def _architecture_from_sm(sm_version: int) -> str:
 
 
 # Cache of system_id -> vendor device name, populated at startup from the
-# aiconfigurator SDK (via configiq.systems). aicostings loads the same map from
+# aisimulate SDK (via configiq.systems). aicostings loads the same map from
 # the same source so the two services never drift on GPU naming.
 # Only systems with genuine perf-data display names appear here; systems without
 # perf data are absent and get hidden from /systems (see get_systems). Startup
@@ -585,7 +585,7 @@ def _parse_include(include: str | None) -> set[str]:
 # ─── App ─────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="AIConfigurator API",
+    title="AISimulators API",
     description="GPU recommendation, performance estimation, and memory estimation for LLM inference.",
     version="1.0.0",
     default_response_class=ORJSONResponse,
@@ -594,8 +594,8 @@ app = FastAPI(
 # Initialize OpenTelemetry (tracing + metrics + HTTP middleware) if the optional
 # extra is present.
 if _OBS:
-    observability.enable(app, service_name="aiconfigurator", service_version="1.0.0",
-                         meter_name="aiconfigurator.api")
+    observability.enable(app, service_name="aisimulators", service_version="1.0.0",
+                         meter_name="aisimulators.api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -606,7 +606,7 @@ app.add_middleware(
 
 # Expose the API as MCP tools if the optional extra is present.
 if _MCP:
-    mcp_support.mount(app, name="aiconfigurator",
+    mcp_support.mount(app, name="aisimulators",
                       description="GPU recommendation and performance estimation for LLM inference")
 else:
     logger.info("MCP server unavailable (install with: pip install '.[mcp]')")
@@ -614,7 +614,7 @@ else:
 
 @app.on_event("startup")
 def startup_event():
-    """Load GPU display names from the aiconfigurator SDK at startup.
+    """Load GPU display names from the aisimulate SDK at startup.
 
     Systems without a loaded display name (no perf benchmark data) are excluded
     from /systems responses (see get_systems). If no display names load at all,

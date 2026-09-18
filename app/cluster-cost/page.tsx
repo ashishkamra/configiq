@@ -28,7 +28,7 @@ const GPU_CATALOG: GpuCatalogEntry[] = [
   { id: 'mi300x',  label: 'MI300X 192GB', rate: 4.20, price: 38000, tdpW: 750,  mem: 192 },
 ]
 
-// Maps a cluster-cost catalog id to the aicostings/aiconfigurator systemId used
+// Maps a cluster-cost catalog id to the aicostings/aisimulators systemId used
 // by useCostings. Only ids with a confident 1:1 match are listed; a GPU with no
 // entry (a100_40 40GB, mi300x — not in the costings hardware seed) keeps its
 // built-in fallback values.

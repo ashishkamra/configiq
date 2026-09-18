@@ -301,7 +301,7 @@ Shows how data flows from user input through calculations to display.
 > pipeline. None of the referenced modules below (`core.ts`, `validation.ts`,
 > `quantization.ts`, `tensor-parallel.ts`, `vllm-defaults.ts`, `bottleneck.ts`,
 > `parallelism.ts`, `llmd.ts`, `gpu-catalog.json`, `models.ts`) exist anymore —
-> GPU math now runs through the AIConfigurator REST API via `lib/api/`
+> GPU math now runs through the AISimulators REST API via `lib/api/`
 > ([see AGENTS.md](../AGENTS.md#critical-rules)). This section needs a full
 > rewrite, not a rename.
 

@@ -19,7 +19,7 @@ async function proxyToAic(body: Record<string, unknown>, include: string): Promi
 
   if (!baseUrl) {
     return NextResponse.json(
-      { status: 'failed', error: { code: 'AIC_NOT_CONFIGURED', message: 'AIConfigurator API URL is not configured' } },
+      { status: 'failed', error: { code: 'AIC_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
       { status: 503 },
     )
   }
@@ -38,7 +38,7 @@ async function proxyToAic(body: Record<string, unknown>, include: string): Promi
       data = JSON.parse(text)
     } catch {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_INVALID_RESPONSE', message: 'AIConfigurator returned non-JSON response' } },
+        { status: 'failed', error: { code: 'AIC_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502 },
       )
     }
@@ -49,12 +49,12 @@ async function proxyToAic(body: Record<string, unknown>, include: string): Promi
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_TIMEOUT', message: 'AIConfigurator API timed out' } },
+        { status: 'failed', error: { code: 'AIC_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504 },
       )
     }
     return NextResponse.json(
-      { status: 'failed', error: { code: 'AIC_UNAVAILABLE', message: 'AIConfigurator API is unreachable' } },
+      { status: 'failed', error: { code: 'AIC_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502 },
     )
   }

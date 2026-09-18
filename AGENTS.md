@@ -6,9 +6,9 @@ Read this before making any changes.
 ## What this project is
 
 ConfigIQ is a web application for LLM inference sizing, GPU comparison, and
-cost modeling. It is deployed at configiq.dev and uses the AIConfigurator
+cost modeling. It is deployed at configiq.dev and uses the AISimulators
 REST API (server URL set via `AISIMULATORS_GATEWAY_URL`, e.g.
-`https://aiconfigurator.dev`) for GPU recommendations and memory estimation.
+`https://aisimulators.dev`) for GPU recommendations and memory estimation.
 
 ## Tech stack
 
@@ -51,7 +51,7 @@ app/                    # Next.js App Router pages
   hybrid-savings/       # Hybrid Savings tool
   routing/              # Routing Economics tool
   settings/             # App settings
-  api/                  # Next.js API routes — proxy to AIConfigurator REST API
+  api/                  # Next.js API routes — proxy to AISimulators REST API
     recommend/          # POST — GPU sizing
     estimate/           # POST — GPU performance
     memory/             # POST — memory breakdown
@@ -63,7 +63,7 @@ components/
     AppShell.tsx        # Page shell with sidebar nav
 lib/
   gpu-math/             # Legacy client-side GPU sizing — historical/fallback only
-  api/                  # AIConfigurator API clients — source of truth for GPU math
+  api/                  # AISimulators API clients — source of truth for GPU math
   pricing/              # Cloud GPU pricing data
   hooks/                # useAicCatalog → /api/catalog, useCostings →
                         # /api/costings/* — both go through same-origin api/
@@ -79,21 +79,21 @@ services/               # Backend Python microservices (FastAPI), built as
   configiq-py/          # Shared Python library (import name: configiq):
                         # GPU systems catalog, OpenTelemetry + MCP wiring.
                         # Consumed by the services below as a uv path dependency.
-  aiconfigurator/       # Thin FastAPI wrapper over the aiconfigurator SDK
+  aisimulators/       # Thin FastAPI wrapper over the aisimulate SDK
                         # (GPU sizing, performance + memory estimation)
   aicostings/           # GPU + LLM pricing API (scrapes providers into Valkey)
 ```
 
 The `services/` tree is Python (FastAPI + uv), separate from the Next.js
-frontend at the repo root. GPU math still lives in the aiconfigurator SDK — the
-`aiconfigurator` service is only a REST wrapper. See each service's `README.md`
+frontend at the repo root. GPU math still lives in the aisimulate SDK — the
+`aisimulators` service is only a REST wrapper. See each service's `README.md`
 for details.
 
 ## Critical rules
 
-1. **GPU math belongs in AIConfigurator** — never write sizing formulas inside
+1. **GPU math belongs in AISimulators** — never write sizing formulas inside
    React components. Components call `lib/api/` clients, which talk to the
-   AIConfigurator REST API via the `app/api/` proxy routes. `lib/gpu-math/` is
+   AISimulators REST API via the `app/api/` proxy routes. `lib/gpu-math/` is
    legacy client-side sizing kept for historical/fallback use only — do not
    add new formulas there.
 

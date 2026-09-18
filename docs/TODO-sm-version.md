@@ -1,4 +1,4 @@
-# TODO: Add sm_version to AIConfigurator systems API
+# TODO: Add sm_version to AISimulators systems API
 
 ## Context
 

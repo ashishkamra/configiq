@@ -67,7 +67,7 @@ export async function callKvCacheCalc(
   const timeoutSeconds = aicTimeoutSeconds()
 
   if (!baseUrl) {
-    return makeError(requestId, 'AIC_NOT_CONFIGURED', 'AIConfigurator API URL is not configured')
+    return makeError(requestId, 'AIC_NOT_CONFIGURED', 'AISimulators API URL is not configured')
   }
 
   const externalPayload: Record<string, unknown> = {
@@ -100,13 +100,13 @@ export async function callKvCacheCalc(
   } catch (err: unknown) {
     const durationMs = Math.round(performance.now() - startTime)
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      return makeError(requestId, 'AIC_TIMEOUT', `The AIConfigurator API did not respond within ${timeoutSeconds} seconds (waited ${durationMs}ms)`)
+      return makeError(requestId, 'AIC_TIMEOUT', `The AISimulators API did not respond within ${timeoutSeconds} seconds (waited ${durationMs}ms)`)
     }
-    return makeError(requestId, 'AIC_UNAVAILABLE', 'AIConfigurator API is unreachable')
+    return makeError(requestId, 'AIC_UNAVAILABLE', 'AISimulators API is unreachable')
   }
 
   if (!response.ok) {
-    let detail = `AIConfigurator API returned HTTP ${response.status}`
+    let detail = `AISimulators API returned HTTP ${response.status}`
     try {
       const body = await response.json()
       if (typeof body.detail === 'string') detail = body.detail
@@ -124,7 +124,7 @@ export async function callKvCacheCalc(
     }
     rawData = parsed as Record<string, unknown>
   } catch {
-    return makeError(requestId, 'AIC_INVALID_RESPONSE', 'AIConfigurator API returned non-JSON response')
+    return makeError(requestId, 'AIC_INVALID_RESPONSE', 'AISimulators API returned non-JSON response')
   }
 
   const breakdown = (rawData.memory_breakdown ?? {}) as Record<string, unknown>

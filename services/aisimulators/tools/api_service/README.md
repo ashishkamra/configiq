@@ -1,4 +1,4 @@
-# AIConfigurator REST API
+# AISimulators REST API
 
 FastAPI service providing GPU recommendation and performance estimation for LLM inference.
 
@@ -74,7 +74,7 @@ Tools are automatically generated from the OpenAPI schema with full parameter va
 ```json
 {
   "mcpServers": {
-    "aiconfigurator": {
+    "aisimulators": {
       "url": "http://localhost:8000/mcp"
     }
   }

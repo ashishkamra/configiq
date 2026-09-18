@@ -99,7 +99,7 @@ describe('KvCacheCalcRequestSchema', () => {
 
 describe('callKvCacheCalc', () => {
   beforeEach(() => {
-    vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'https://aiconfigurator.dev')
+    vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'https://aisimulators.dev')
   })
 
   afterEach(() => {
@@ -135,7 +135,7 @@ describe('callKvCacheCalc', () => {
 
     await callKvCacheCalc(VALID_REQUEST)
 
-    expect(mockFetch.mock.calls[0][0]).toBe('https://aiconfigurator.dev/memory')
+    expect(mockFetch.mock.calls[0][0]).toBe('https://aisimulators.dev/memory')
   })
 
   it('sends correct fields without credentials', async () => {

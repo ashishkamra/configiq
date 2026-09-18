@@ -1,5 +1,5 @@
 # Multi-stage Next.js 14 build
-ARG NEXT_PUBLIC_AISIMULATORS_API_URL=https://aiconfigurator.dev
+ARG NEXT_PUBLIC_AISIMULATORS_API_URL=https://aisimulators.dev
 
 FROM node:20-alpine AS builder
 

@@ -10,7 +10,7 @@ under `services/` — always sharing the same tags so a given version denotes th
 three that shipped together:
 
 - `ghcr.io/redhat-performance/configiq` (Next.js webapp)
-- `ghcr.io/redhat-performance/aiconfigurator` (GPU sizing / estimation API)
+- `ghcr.io/redhat-performance/aisimulators` (GPU sizing / estimation API)
 - `ghcr.io/redhat-performance/aicostings` (GPU / LLM pricing API)
 
 The matrix runs `fail-fast`, so if any one image fails to build, none of the
@@ -35,8 +35,8 @@ three publish — the tag is all-or-nothing across all three.
    - Triggers the build workflow (`.github/workflows/build.yml`)
    - Builds **all three** container images (see Overview)
    - Pushes each to GHCR with matching tags:
-     - `ghcr.io/redhat-performance/{configiq,aiconfigurator,aicostings}:X.Y.Z` (specific version)
-     - `ghcr.io/redhat-performance/{configiq,aiconfigurator,aicostings}:latest` (most recent release)
+     - `ghcr.io/redhat-performance/{configiq,aisimulators,aicostings}:X.Y.Z` (specific version)
+     - `ghcr.io/redhat-performance/{configiq,aisimulators,aicostings}:latest` (most recent release)
 
 ## Version Display in UI
 
@@ -64,7 +64,7 @@ its running containers use, so the per-host tag is the only lever.
 Published containers:
 
 - https://github.com/redhat-performance/configiq/pkgs/container/configiq
-- https://github.com/redhat-performance/configiq/pkgs/container/aiconfigurator
+- https://github.com/redhat-performance/configiq/pkgs/container/aisimulators
 - https://github.com/redhat-performance/configiq/pkgs/container/aicostings
 
 ## Bumping the simulation SDK

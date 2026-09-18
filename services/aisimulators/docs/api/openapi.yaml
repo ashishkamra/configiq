@@ -1,9 +1,9 @@
 openapi: 3.1.0
 info:
-  title: AIConfigurator API
+  title: AISimulators API
   description: |
     Minimal REST API for LLM inference GPU sizing and memory estimation.
-    Wraps the aiconfigurator SDK (`cli_recommend` and `estimate_kv_cache`).
+    Wraps the aisimulate SDK (`cli_recommend` and `estimate_kv_cache`).
   version: 1.0.0
   contact:
     name: ConfigIQ team
@@ -11,7 +11,7 @@ info:
 servers:
   - url: http://localhost:7860
     description: Local development
-  - url: https://aiconfigurator.dev
+  - url: https://aisimulators.dev
     description: Production
 
 tags:
@@ -36,7 +36,7 @@ paths:
         and serving modes (aggregated and disaggregated) to find the deployment
         with the fewest GPUs that meets the constraints.
 
-        Wraps `cli_recommend()` from the aiconfigurator SDK.
+        Wraps `cli_recommend()` from the aisimulate SDK.
 
         Exactly one of `target_request_rate` or `target_concurrency` must be
         provided.
@@ -93,7 +93,7 @@ paths:
         Use this when you know your deployment configuration and want to predict
         its performance. Use `/recommend` when you want to find the optimal config.
 
-        Wraps `cli_estimate()` from the aiconfigurator SDK.
+        Wraps `cli_estimate()` from the aisimulate SDK.
 
         Use the `include` query parameter to enrich the result with optional
         detail sections:
@@ -145,7 +145,7 @@ paths:
         estimates the per-rank memory breakdown: model weights, activations,
         runtime overhead, communication buffers, and KV cache capacity.
 
-        Wraps `estimate_kv_cache()` from the aiconfigurator SDK.
+        Wraps `estimate_kv_cache()` from the aisimulate SDK.
       requestBody:
         required: true
         content:

@@ -232,7 +232,7 @@ export async function fetchEstimateAsInferenceResult(
       kv_cache_used_gb: kvCacheGb,
       max_sequences_from_memory: maxNumSeqs,
       kv_category: 'AIC',
-      kv_category_label: 'AIConfigurator estimate',
+      kv_category_label: 'AISimulators estimate',
     },
     vllm_config: {
       tensor_parallel_size: sc?.tensor_parallel_size ?? tp,

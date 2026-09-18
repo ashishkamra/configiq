@@ -146,7 +146,7 @@ export function Settings() {
                 </span>
               </div>
               <div className={styles.sectionDesc}>
-                Models tested for use with the AIConfigurator sizing engine.
+                Models tested for use with the AISimulators sizing engine.
               </div>
             </div>
             <Label color="blue" isCompact>{getAppConfig().testedModels.length} models</Label>

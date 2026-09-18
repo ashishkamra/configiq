@@ -667,7 +667,7 @@ def _skip_if_missing_perf_data(resp) -> None:
 
 @pytest.mark.skipif(
     not _sdk_available(),
-    reason="aiconfigurator SDK not installed or missing perf data",
+    reason="aisimulate SDK not installed or missing perf data",
 )
 class TestIntegration:
 

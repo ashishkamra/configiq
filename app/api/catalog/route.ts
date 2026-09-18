@@ -1,9 +1,9 @@
 // GET /api/catalog
-// Same-origin proxy for the AIConfigurator catalog. Fetches /systems and
+// Same-origin proxy for the AISimulators catalog. Fetches /systems and
 // /models (both with specs) server-side via AISIMULATORS_GATEWAY_URL and
 // returns their raw shapes combined as { systems, models }.
 //
-// The browser must call this route rather than AIConfigurator directly, so the
+// The browser must call this route rather than AISimulators directly, so the
 // per-host gateway (host.containers.internal on each deployment) is resolved
 // server-side. That keeps the .dev/.xyz two-host split correct client-side and
 // removes the need for a build-time NEXT_PUBLIC_AISIMULATORS_API_URL.
@@ -18,7 +18,7 @@ const DEFAULT_TIMEOUT_SECONDS = 30
 export async function GET() {
   // Dev default mirrors app/api/gpus/route.ts so local dev works without the
   // gateway env set; production sets AISIMULATORS_GATEWAY_URL per host.
-  const baseUrl = process.env.AISIMULATORS_GATEWAY_URL || 'https://aiconfigurator.dev'
+  const baseUrl = process.env.AISIMULATORS_GATEWAY_URL || 'https://aisimulators.dev'
   // Shares the shared resolver's positive-integer validation, with the catalog
   // fetch's own 30s baseline (a negative env value would break AbortSignal).
   const timeoutSeconds = aicTimeoutSeconds(DEFAULT_TIMEOUT_SECONDS)
@@ -43,7 +43,7 @@ export async function GET() {
           status: 'failed',
           error: {
             code: 'AIC_ERROR',
-            message: `AIConfigurator catalog fetch failed (systems ${systemsRes.status}, models ${modelsRes.status})`,
+            message: `AISimulators catalog fetch failed (systems ${systemsRes.status}, models ${modelsRes.status})`,
           },
         },
         { status: 502, headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } },
@@ -57,7 +57,7 @@ export async function GET() {
       modelsData = await modelsRes.json()
     } catch {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_INVALID_RESPONSE', message: 'AIConfigurator returned non-JSON response' } },
+        { status: 'failed', error: { code: 'AIC_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502, headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } },
       )
     }
@@ -82,12 +82,12 @@ export async function GET() {
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_TIMEOUT', message: 'AIConfigurator API timed out' } },
+        { status: 'failed', error: { code: 'AIC_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504 },
       )
     }
     return NextResponse.json(
-      { status: 'failed', error: { code: 'AIC_UNAVAILABLE', message: 'AIConfigurator API is unreachable' } },
+      { status: 'failed', error: { code: 'AIC_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502 },
     )
   }
