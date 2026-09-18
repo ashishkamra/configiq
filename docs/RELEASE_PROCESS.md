@@ -67,27 +67,34 @@ Published containers:
 - https://github.com/redhat-performance/configiq/pkgs/container/aiconfigurator
 - https://github.com/redhat-performance/configiq/pkgs/container/aicostings
 
-## Bumping the aiconfigurator SDK
+## Bumping the simulation SDK
 
-The `aiconfigurator` and `aicostings` services install the `aiconfigurator` SDK
-(and its Rust-compiled `aiconfigurator-core`) as wheels from the Red Hat fork's
-GitHub Release assets — not PyPI. They are referenced by **exact download URL**
-rather than `name==version`, because NVIDIA publishes the same `0.11.0` on PyPI
-with an incompatible `numpy~=1.26.4` pin that would otherwise shadow the fork's
-`numpy>=2.1,<3` build and make the install unresolvable. A direct URL forces pip
-to install the exact fork artifacts regardless of what PyPI serves.
+The `aisimulators` and `aicostings` services install the **aisimulate** SDK as a
+single unified wheel from the Red Hat `redhat-performance/aisimulate` fork's
+GitHub Release assets — not PyPI. The one wheel bundles the Rust-compiled core
+and provides the `aiconfigurator` / `aiconfigurator_core` compatibility
+namespaces the services still import (`aisimulators` directly for sizing;
+`aicostings` indirectly via `configiq.systems` for the GPU catalog). It is
+referenced by **exact download URL** rather than `name==version`, because the
+wheel is published only via the fork's Release (never PyPI); a direct URL forces
+pip to install that exact artifact.
 
-To move to a new SDK build, update the two wheel URLs — keep them **identical in
-both files** — in lockstep:
+To move to a new SDK build, update the single `aisimulate @ …` wheel URL — keep
+it **identical in both files** — in `[project.dependencies]`, then regenerate
+each `uv.lock` (`uv lock`):
 
-1. `services/aisimulators/pyproject.toml` — the `aiconfigurator @ …` and
-   `aiconfigurator-core @ …` entries in `[project.dependencies]`.
-2. `services/aicostings/pyproject.toml` — the same two entries.
+1. `services/aisimulators/pyproject.toml`
+2. `services/aicostings/pyproject.toml`
 
-Each URL points at a specific `deploy-api-v<version>+<hash>` release asset (the
+The URL points at a specific `deploy-api-v<version>+<hash>` release asset (the
 `+` in the tag is URL-encoded as `%2B`); never the rolling `deploy-api-latest`,
-so rebuilds are reproducible. The wheels are produced by the fork's
+so rebuilds are reproducible. The wheel is produced by the fork's
 `deploy-api-wheels.yml` workflow on its `deploy/api` branch.
+
+> **Note:** the aisimulate wheel pulls in a large JAX/optimization dependency
+> stack (jax, jaxlib, optax, google-vizier, tfp-nightly) as base dependencies,
+> so both service images are substantially larger than under the previous
+> two-wheel aiconfigurator 0.11/0.12 SDK.
 
 ## Deployment
 

@@ -5,11 +5,11 @@
 #
 #   podman build -f services/aisimulators/Containerfile -t aisimulators services/
 #
-# Unlike the aiconfigurator monorepo's Containerfile (a multi-stage Rust/maturin
-# wheel *builder*), this image just installs the already-published aiconfigurator
-# SDK wheels from the Red Hat fork's GitHub Releases and layers the thin FastAPI
-# wrapper (plus the shared configiq package) on top. The SDK wheel URLs are
-# pinned in pyproject.toml; bump them there to move to a newer SDK.
+# Unlike the aisimulate monorepo's Containerfile (a multi-stage Rust/maturin
+# wheel *builder*), this image just installs the already-published single
+# aisimulate SDK wheel from the Red Hat fork's GitHub Releases and layers the
+# thin FastAPI wrapper (plus the shared configiq package) on top. The SDK wheel
+# URL is pinned in pyproject.toml; bump it there to move to a newer SDK.
 
 FROM python:3.12-slim
 
