@@ -70,10 +70,10 @@ app/                  Next.js App Router pages
   routing/            Routing Economics
   settings/           App settings
   api/                Next.js API routes (proxy to REST APIs)
-    recommend/        POST — GPU sizing via AIC /recommend
-    estimate/         POST — GPU performance via AIC /estimate
-    memory/           POST — memory breakdown via AIC /memory
-    gpus/             GET — GPU catalog via AIC /systems
+    recommend/        POST — GPU sizing via AISimulators /recommend
+    estimate/         POST — GPU performance via AISimulators /estimate
+    memory/           POST — memory breakdown via AISimulators /memory
+    gpus/             GET — GPU catalog via AISimulators /systems
     hf-config/        GET — Hugging Face model config lookup
     health/           GET — health check
 components/
