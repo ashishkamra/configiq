@@ -43,7 +43,7 @@ export const RecommendRequestSchema = z.object({
   prefix: z.number().int().min(0).default(0),
   database_mode: z.enum(['HYBRID', 'SILICON', 'EMPIRICAL', 'SOL']).default('HYBRID'),
   top_n: z.number().int().min(1).max(20).default(5),
-  // HF config.json for models AIC can't resolve from its catalog (nullish = resolve from HF).
+  // HF config.json for models AISimulators can't resolve from its catalog (nullish = resolve from HF).
   model_config: z.record(z.string(), z.unknown()).nullish(),
 }).strict().refine(
   data => (data.target_request_rate != null) !== (data.target_concurrency != null),
@@ -67,7 +67,7 @@ export const KvCacheCalcRequestSchema = z.object({
   moe_ep_size: z.number().int().positive().nullish(),
   memory_fraction_kind: z.enum(['of_total', 'of_free']).default('of_total'),
   memory_fraction_value: z.number().min(0).max(1).default(1.0),
-  // HF config.json for models AIC can't resolve from its catalog (nullish = resolve from HF).
+  // HF config.json for models AISimulators can't resolve from its catalog (nullish = resolve from HF).
   model_config: z.record(z.string(), z.unknown()).nullish(),
 }).strict()
 

@@ -1,5 +1,5 @@
 /**
- * Adapter that calls the AIC /estimate API and converts the response
+ * Adapter that calls the AISimulators /estimate API and converts the response
  * into the InferenceConfigResult shape used by the Performance Estimate page.
  *
  * Unlike the recommend adapter, /estimate takes explicit TP/PP/batch_size
@@ -156,8 +156,8 @@ export async function fetchEstimateAsInferenceResult(
   const data = await res.json()
 
   if (!res.ok || data?.status === 'failed') {
-    const code = (data?.error as Record<string, unknown>)?.code as string ?? 'AIC_NO_CONFIGURATION'
-    const message = (data?.error as Record<string, unknown>)?.message as string ?? data?.detail as string ?? 'AIC estimate failed'
+    const code = (data?.error as Record<string, unknown>)?.code as string ?? 'AISIM_NO_CONFIGURATION'
+    const message = (data?.error as Record<string, unknown>)?.message as string ?? data?.detail as string ?? 'AISimulators estimate failed'
     throw new EstimateError(code, message)
   }
 
@@ -231,7 +231,7 @@ export async function fetchEstimateAsInferenceResult(
       kv_cache_budget_gb: usablePerGpu != null ? usablePerGpu - weightGb / shardCount : null,
       kv_cache_used_gb: kvCacheGb,
       max_sequences_from_memory: maxNumSeqs,
-      kv_category: 'AIC',
+      kv_category: 'AISimulators',
       kv_category_label: 'AISimulators estimate',
     },
     vllm_config: {

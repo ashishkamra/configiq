@@ -25,8 +25,8 @@ vi.mock('@/lib/app-config', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/hooks/useAicCatalog', () => ({
-  useAicCatalog: () => ({
+vi.mock('@/lib/hooks/useCatalog', () => ({
+  useCatalog: () => ({
     gpuOptions: [
       { systemId: 'h200_sxm', displayName: 'NVIDIA H200', vramGb: 141 },
       { systemId: 'h100_sxm', displayName: 'NVIDIA H100', vramGb: 80 },

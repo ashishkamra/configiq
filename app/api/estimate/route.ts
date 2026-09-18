@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { aicTimeoutSeconds } from '@/lib/api/timeout'
+import { gatewayTimeoutSeconds } from '@/lib/api/timeout'
 
 export async function POST(req: NextRequest) {
   const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
-  const timeoutSeconds = aicTimeoutSeconds()
+  const timeoutSeconds = gatewayTimeoutSeconds()
 
   if (!baseUrl) {
     return NextResponse.json(
-      { status: 'failed', error: { code: 'AIC_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
+      { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
       { status: 503 },
     )
   }
 
   const { searchParams } = new URL(req.url)
   const include = searchParams.get('include')
-  const aicUrl = include
+  const gatewayUrl = include
     ? `${baseUrl}/estimate?include=${encodeURIComponent(include)}`
     : `${baseUrl}/estimate`
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(aicUrl, {
+    const res = await fetch(gatewayUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(body),
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       data = JSON.parse(text)
     } catch {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
+        { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502 },
       )
     }
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         d?.detail ??
         ''
       ).toString().toLowerCase()
-      let code = 'AIC_NO_CONFIGURATION'
+      let code = 'AISIM_NO_CONFIGURATION'
       if (raw.includes('oom') || raw.includes('does not fit in gpu memory')) code = 'OOM'
       else if (raw.includes('moe_ep_size') || raw.includes('moe_tp_size') || raw.includes('moe models')) code = 'MOE_PARAMS_REQUIRED'
       else if (res.status === 401 || raw.includes('authentication') || raw.includes('gated')) code = 'AUTH_REQUIRED'
@@ -76,12 +76,12 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_TIMEOUT', message: 'AISimulators API timed out' } },
+        { status: 'failed', error: { code: 'AISIM_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504 },
       )
     }
     return NextResponse.json(
-      { status: 'failed', error: { code: 'AIC_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
+      { status: 'failed', error: { code: 'AISIM_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502 },
     )
   }

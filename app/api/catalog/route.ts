@@ -9,10 +9,10 @@
 // removes the need for a build-time NEXT_PUBLIC_AISIMULATORS_API_URL.
 
 import { NextResponse } from 'next/server'
-import { aicTimeoutSeconds } from '@/lib/api/timeout'
+import { gatewayTimeoutSeconds } from '@/lib/api/timeout'
 
 // This is the catalog fetch's own timeout (30s). The value surfaced to the
-// client below is aicTimeoutSeconds() — the longer recommend/estimate timeout.
+// client below is gatewayTimeoutSeconds() — the longer recommend/estimate timeout.
 const DEFAULT_TIMEOUT_SECONDS = 30
 
 export async function GET() {
@@ -21,7 +21,7 @@ export async function GET() {
   const baseUrl = process.env.AISIMULATORS_GATEWAY_URL || 'https://aisimulators.dev'
   // Shares the shared resolver's positive-integer validation, with the catalog
   // fetch's own 30s baseline (a negative env value would break AbortSignal).
-  const timeoutSeconds = aicTimeoutSeconds(DEFAULT_TIMEOUT_SECONDS)
+  const timeoutSeconds = gatewayTimeoutSeconds(DEFAULT_TIMEOUT_SECONDS)
 
   try {
     const [systemsRes, modelsRes] = await Promise.all([
@@ -42,7 +42,7 @@ export async function GET() {
         {
           status: 'failed',
           error: {
-            code: 'AIC_ERROR',
+            code: 'AISIM_ERROR',
             message: `AISimulators catalog fetch failed (systems ${systemsRes.status}, models ${modelsRes.status})`,
           },
         },
@@ -57,7 +57,7 @@ export async function GET() {
       modelsData = await modelsRes.json()
     } catch {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
+        { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502, headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } },
       )
     }
@@ -66,15 +66,15 @@ export async function GET() {
       {
         systems: systemsData.systems ?? [],
         models: modelsData.models ?? [],
-        // Effective AIC request timeout (recommend/estimate), for the loader hint.
-        timeoutSeconds: aicTimeoutSeconds(),
+        // Effective AISimulators request timeout (recommend/estimate), for the loader hint.
+        timeoutSeconds: gatewayTimeoutSeconds(),
       },
       {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
-          // Mirrors the useAicCatalog client-side cache TTL (10 min).
+          // Mirrors the useCatalog client-side cache TTL (10 min).
           'Cache-Control': 'public, s-maxage=600, stale-while-revalidate=3600',
         },
       },
@@ -82,12 +82,12 @@ export async function GET() {
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_TIMEOUT', message: 'AISimulators API timed out' } },
+        { status: 'failed', error: { code: 'AISIM_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504 },
       )
     }
     return NextResponse.json(
-      { status: 'failed', error: { code: 'AIC_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
+      { status: 'failed', error: { code: 'AISIM_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502 },
     )
   }

@@ -1,25 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { RecommendRequestSchema } from '@/lib/api/schemas'
 import { callRecommend, generateRequestId } from '@/lib/api/recommend'
-import { aicTimeoutSeconds } from '@/lib/api/timeout'
+import { gatewayTimeoutSeconds } from '@/lib/api/timeout'
 
 const ERROR_STATUS_MAP: Record<string, number> = {
   INVALID_REQUEST: 400,
-  AIC_NOT_CONFIGURED: 503,
-  AIC_UNAVAILABLE: 502,
-  AIC_TIMEOUT: 504,
-  AIC_INVALID_RESPONSE: 502,
-  AIC_NO_CONFIGURATION: 422,
+  AISIM_NOT_CONFIGURED: 503,
+  AISIM_UNAVAILABLE: 502,
+  AISIM_TIMEOUT: 504,
+  AISIM_INVALID_RESPONSE: 502,
+  AISIM_NO_CONFIGURATION: 422,
   INTERNAL_ERROR: 500,
 }
 
-async function proxyToAic(body: Record<string, unknown>, include: string): Promise<NextResponse> {
+async function proxyToGateway(body: Record<string, unknown>, include: string): Promise<NextResponse> {
   const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
-  const timeoutSeconds = aicTimeoutSeconds()
+  const timeoutSeconds = gatewayTimeoutSeconds()
 
   if (!baseUrl) {
     return NextResponse.json(
-      { status: 'failed', error: { code: 'AIC_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
+      { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
       { status: 503 },
     )
   }
@@ -38,7 +38,7 @@ async function proxyToAic(body: Record<string, unknown>, include: string): Promi
       data = JSON.parse(text)
     } catch {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
+        { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502 },
       )
     }
@@ -49,12 +49,12 @@ async function proxyToAic(body: Record<string, unknown>, include: string): Promi
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       return NextResponse.json(
-        { status: 'failed', error: { code: 'AIC_TIMEOUT', message: 'AISimulators API timed out' } },
+        { status: 'failed', error: { code: 'AISIM_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504 },
       )
     }
     return NextResponse.json(
-      { status: 'failed', error: { code: 'AIC_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
+      { status: 'failed', error: { code: 'AISIM_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502 },
     )
   }
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     const include = req.nextUrl.searchParams.get('include')
 
     if (include) {
-      return proxyToAic(body, include)
+      return proxyToGateway(body, include)
     }
 
     const validated = RecommendRequestSchema.parse(body)

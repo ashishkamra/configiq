@@ -18,7 +18,7 @@ const PHASE_DURATION = 3;
 interface GpuChipLoaderProps {
   elapsed: number;
   /** Upper-bound wait shown in the hint, in seconds. Pass
-   * DEFAULT_AIC_TIMEOUT_SECONDS from lib/api/timeout. */
+   * DEFAULT_GATEWAY_TIMEOUT_SECONDS from lib/api/timeout. */
   timeoutSeconds: number;
 }
 

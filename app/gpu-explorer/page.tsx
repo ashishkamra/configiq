@@ -18,7 +18,7 @@ import {
   Label,
   Text
 } from "@patternfly/react-core";
-import { useAicCatalog, type GpuOption } from '@/lib/hooks/useAicCatalog';
+import { useCatalog, type GpuOption } from '@/lib/hooks/useCatalog';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useCostings } from '@/lib/hooks/useCostings';
 import { GpuBubbleChart } from './GpuBubbleChart';
@@ -41,7 +41,7 @@ export default function GpuExplorerPage() {
   const [xAxis, setXAxis] = React.useState<XAxis>('vram');
   const [yAxis, setYAxis] = React.useState<YAxis>('throughput-index');
   const [vendorFilter, setVendorFilter] = React.useState<'all' | 'nvidia' | 'amd'>('all');
-  const { gpuOptions, isLoading } = useAicCatalog();
+  const { gpuOptions, isLoading } = useCatalog();
   const { costingsEnabled, preferredCloudProvider, pricingSource } = useSettings();
   const costings = useCostings(costingsEnabled, pricingSource);
 

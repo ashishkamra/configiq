@@ -6,7 +6,7 @@ import { EyeIcon, EyeSlashIcon, CheckCircleIcon, ExclamationTriangleIcon } from 
 import { useSettings, type InferenceBackend } from '@/contexts/SettingsContext';
 import { getAppConfig } from '@/lib/app-config';
 import { ModelInput } from '@/components/ui/ModelInput';
-import { useAicCatalog } from '@/lib/hooks/useAicCatalog';
+import { useCatalog } from '@/lib/hooks/useCatalog';
 import { fetchModelConfig } from '@/lib/huggingface/fetch-config';
 import styles from './Settings.module.css';
 
@@ -24,7 +24,7 @@ export function Settings() {
     inferenceBackend, setInferenceBackend, backendVersion, setBackendVersion,
     costingsEnabled, setCostingsEnabled,
   } = useSettings();
-  const { modelOptions, isLoading: catalogLoading } = useAicCatalog();
+  const { modelOptions, isLoading: catalogLoading } = useCatalog();
 
   const [localModel, setLocalModel] = React.useState('');
   const [modelStatus, setModelStatus] = React.useState<ModelStatus>('idle');
@@ -126,7 +126,7 @@ export function Settings() {
               isLoading={catalogLoading}
               status={modelStatus}
               placeholder={catalogLoading ? 'Loading catalog…' : 'e.g. Qwen/Qwen3-32B'}
-              helperText="All tools use this model by default. Type to autocomplete from the AIC catalog."
+              helperText="All tools use this model by default. Type to autocomplete from the catalog."
             />
           </div>
         </div>

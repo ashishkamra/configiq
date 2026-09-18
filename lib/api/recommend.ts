@@ -1,5 +1,5 @@
 import type { RecommendRequest } from './schemas'
-import { aicTimeoutSeconds } from './timeout'
+import { gatewayTimeoutSeconds } from './timeout'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -168,10 +168,10 @@ export async function callRecommend(
   const startTime = performance.now()
 
   const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
-  const timeoutSeconds = aicTimeoutSeconds()
+  const timeoutSeconds = gatewayTimeoutSeconds()
 
   if (!baseUrl) {
-    return makeError(requestId, 'AIC_NOT_CONFIGURED', 'AISimulators API URL is not configured')
+    return makeError(requestId, 'AISIM_NOT_CONFIGURED', 'AISimulators API URL is not configured')
   }
 
   const externalPayload: Record<string, unknown> = {
@@ -207,9 +207,9 @@ export async function callRecommend(
   } catch (err: unknown) {
     const durationMs = Math.round(performance.now() - startTime)
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      return makeError(requestId, 'AIC_TIMEOUT', `The AISimulators API did not respond within ${timeoutSeconds} seconds (waited ${durationMs}ms)`)
+      return makeError(requestId, 'AISIM_TIMEOUT', `The AISimulators API did not respond within ${timeoutSeconds} seconds (waited ${durationMs}ms)`)
     }
-    return makeError(requestId, 'AIC_UNAVAILABLE', 'AISimulators API is unreachable')
+    return makeError(requestId, 'AISIM_UNAVAILABLE', 'AISimulators API is unreachable')
   }
 
   if (!response.ok) {
@@ -219,7 +219,7 @@ export async function callRecommend(
       if (typeof body.detail === 'string') detail = body.detail
     } catch { /* ignore parse errors */ }
 
-    const code = response.status === 422 ? 'AIC_NO_CONFIGURATION' : 'AIC_UNAVAILABLE'
+    const code = response.status === 422 ? 'AISIM_NO_CONFIGURATION' : 'AISIM_UNAVAILABLE'
     return makeError(requestId, code, detail)
   }
 
@@ -227,12 +227,12 @@ export async function callRecommend(
   try {
     rawData = await response.json() as Record<string, unknown>
   } catch {
-    return makeError(requestId, 'AIC_INVALID_RESPONSE', 'AISimulators API returned non-JSON response')
+    return makeError(requestId, 'AISIM_INVALID_RESPONSE', 'AISimulators API returned non-JSON response')
   }
 
   const configs = rawData.configs as Array<Record<string, unknown>> | undefined
   if (!configs || configs.length === 0) {
-    return makeError(requestId, 'AIC_NO_CONFIGURATION', 'No valid GPU configuration found for this model and hardware combination.')
+    return makeError(requestId, 'AISIM_NO_CONFIGURATION', 'No valid GPU configuration found for this model and hardware combination.')
   }
 
   const best = configs[0]

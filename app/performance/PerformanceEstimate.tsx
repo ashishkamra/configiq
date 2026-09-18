@@ -33,7 +33,7 @@ import { ModelInput, type ModelStatus } from '@/components/ui/ModelInput';
 import { ComboBox, type ComboBoxItem } from '@/components/ModelComboBox/ModelComboBox';
 import { buildModelItems, needsHfConfig } from '@/lib/model-options';
 import { GpuSystemInput } from '@/components/ui/GpuSystemInput';
-import { useAicCatalog, type ModelSpec } from '@/lib/hooks/useAicCatalog';
+import { useCatalog, type ModelSpec } from '@/lib/hooks/useCatalog';
 import { GpuChipLoader } from '@/components/GpuChipLoader/GpuChipLoader';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useCostings, resolveCloudRate } from '@/lib/hooks/useCostings';
@@ -130,7 +130,7 @@ export default function QuickEstimate() {
   console.log('🔵 QuickEstimate component mounting');
   const { hydrated, hfToken, defaultModel: settingsDefaultModel, inferenceBackend, backendVersion, costingsEnabled, preferredCloudProvider, pricingSource } = useSettings();
   const costings = useCostings(costingsEnabled, pricingSource);
-  const { gpuOptions: aicGpus, modelOptions: aicModels, modelSpecs, timeoutSeconds: aicTimeout, isLoading: catalogLoading } = useAicCatalog();
+  const { gpuOptions: catalogGpus, modelOptions: catalogModels, modelSpecs, timeoutSeconds: gatewayTimeout, isLoading: catalogLoading } = useCatalog();
 
   const [model, setModel] = React.useState('');
   const [gpu, setGpu] = React.useState(() => getAppConfig().defaultSystem);
@@ -146,7 +146,7 @@ export default function QuickEstimate() {
   }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrated gates config.json readiness
-  const modelItems: ComboBoxItem[] = React.useMemo(() => buildModelItems(aicModels), [aicModels, hydrated]);
+  const modelItems: ComboBoxItem[] = React.useMemo(() => buildModelItems(catalogModels), [catalogModels, hydrated]);
 
   // Set model from settings after context has loaded from localStorage
   const modelFromSettings = React.useRef(false);
@@ -165,10 +165,10 @@ export default function QuickEstimate() {
   }, []);
 
   React.useEffect(() => {
-    if (prefillChecked && aicGpus.length > 0 && !aicGpus.find(g => g.systemId === gpu) && !gpuWasPrefilled.current) {
-      setGpu(aicGpus[0].systemId);
+    if (prefillChecked && catalogGpus.length > 0 && !catalogGpus.find(g => g.systemId === gpu) && !gpuWasPrefilled.current) {
+      setGpu(catalogGpus[0].systemId);
     }
-  }, [aicGpus, gpu, prefillChecked]);
+  }, [catalogGpus, gpu, prefillChecked]);
 
   const [fav, setFav] = React.useState(false);
   const [expanded, setExpanded] = React.useState<string[]>(['perf']);
@@ -195,7 +195,7 @@ export default function QuickEstimate() {
 
   const modelStatus: ModelStatus = getAppConfig().testedModels.includes(model)
     ? 'supported'
-    : aicModels.includes(model)
+    : catalogModels.includes(model)
     ? 'catalog'
     : isFetchingConfig || catalogLoading
     ? 'fetching'
@@ -352,7 +352,7 @@ export default function QuickEstimate() {
 
     // Fetch HF config for models not in the catalog, so we can send it to the backend
     // instead of having the backend try to fetch it from HuggingFace.
-    if (!needsHfConfig(model, aicModels)) {
+    if (!needsHfConfig(model, catalogModels)) {
       setIsFetchingConfig(false);
       return;
     }
@@ -388,12 +388,12 @@ export default function QuickEstimate() {
     // Debounce to avoid fetching while user is typing
     const timer = setTimeout(fetchConfig, 500);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [model, hfToken, hydrated, aicModels]);
+  }, [model, hfToken, hydrated, catalogModels]);
 
-  // Auto-run calculation when inputs change — calls AIC /recommend API
+  // Auto-run calculation when inputs change — calls AISimulators /recommend API
   React.useEffect(() => {
-    const aicGpu = aicGpus.find(g => g.systemId === gpu);
-    const systemId = aicGpu?.systemId ?? null;
+    const catalogGpu = catalogGpus.find(g => g.systemId === gpu);
+    const systemId = catalogGpu?.systemId ?? null;
     if (!systemId || !model || catalogLoading) return;
 
     if (calcTrigger === 0) return; // don't auto-run on mount
@@ -420,10 +420,10 @@ export default function QuickEstimate() {
           pp_size: testPpSize,
           backend: inferenceBackend,
           prefix: testPrefix > 0 ? testPrefix : undefined,
-          vram_gb: currentAicGpu?.vramGb ?? null,
-          gpu_memory_utilization: currentAicGpu?.gpuMemoryUtilization,
+          vram_gb: currentCatalogGpu?.vramGb ?? null,
+          gpu_memory_utilization: currentCatalogGpu?.gpuMemoryUtilization,
           backend_version: backendVersion || undefined,
-          hf_model_config: needsHfConfig(model, aicModels) ? (hfConfig as Record<string, unknown> | null) : null,
+          hf_model_config: needsHfConfig(model, catalogModels) ? (hfConfig as Record<string, unknown> | null) : null,
           kvcache_quant_mode: testKVCachePrecision === 'FP8' ? 'fp8' :
                              testKVCachePrecision === 'NVFP4' ? 'nvfp4' : null,
           gemm_quant_mode: testWeightPrecision === 'FP8' ? 'fp8' :
@@ -466,7 +466,7 @@ export default function QuickEstimate() {
             setTestErrorCode(error.code)
             setTestError(error.message)
           } else {
-            setTestErrorCode('AIC_UNAVAILABLE')
+            setTestErrorCode('AISIM_UNAVAILABLE')
             setTestError(error instanceof Error ? error.message : String(error))
           }
         }
@@ -609,11 +609,11 @@ export default function QuickEstimate() {
   const isMoe = detectMoe(spec, hfConfig)
 
   // Use live pricing if available, fallback to estimated pricing from hardware cost
-  const currentAicGpu = aicGpus.find(g => g.systemId === gpu);
-  const gpuLabel = currentAicGpu?.label ?? '';
+  const currentCatalogGpu = catalogGpus.find(g => g.systemId === gpu);
+  const gpuLabel = currentCatalogGpu?.label ?? '';
   const hwCostEntry = costings.gpuHardwareCosts.get(gpu)
   const catalogGpuForPricing = hwCostEntry?.new_usd != null
-    ? { hardware_cost_usd: hwCostEntry.new_usd, name: currentAicGpu?.label ?? gpu }
+    ? { hardware_cost_usd: hwCostEntry.new_usd, name: currentCatalogGpu?.label ?? gpu }
     : null
 
   // Map GPU to pricing key for live pricing worker (pending Costings REST API)
@@ -718,8 +718,8 @@ export default function QuickEstimate() {
       batch_size: testConcurrentUsers,
       tp_size: testResult?.memory_analysis.tp_size ?? testTpSize,
       pp_size: testResult?.parallelism_strategy.pp_size ?? testPpSize,
-      vram_gb: currentAicGpu?.vramGb ?? null,
-      gpu_memory_utilization: currentAicGpu?.gpuMemoryUtilization,
+      vram_gb: currentCatalogGpu?.vramGb ?? null,
+      gpu_memory_utilization: currentCatalogGpu?.gpuMemoryUtilization,
       ...(testPrefix > 0 && { prefix: testPrefix }),
       ...(backendVersion && { backend_version: backendVersion }),
       ...(testWeightPrecision === 'FP8' && { gemm_quant_mode: 'fp8' }),
@@ -729,7 +729,7 @@ export default function QuickEstimate() {
       ...(testWeightPrecision === 'NVFP4' && { gemm_quant_mode: 'nvfp4' }),
       ...(testKVCachePrecision === 'FP8' && { kvcache_quant_mode: 'fp8' }),
       ...(testKVCachePrecision === 'NVFP4' && { kvcache_quant_mode: 'nvfp4' }),
-      hf_model_config: needsHfConfig(model, aicModels)
+      hf_model_config: needsHfConfig(model, catalogModels)
         ? (hfConfig as Record<string, unknown> | null)
         : null,
       moe_quant_mode: isMoe ? testMoeQuantMode : undefined,
@@ -747,7 +747,7 @@ export default function QuickEstimate() {
         decode_batch_size: parsePerfPhase(decodeCfg).batch,
       })
     };
-  }, [model, gpu, inferenceBackend, testISL, testOSL, testConcurrentUsers, testResult, testTpSize, testPpSize, currentAicGpu, testPrefix, backendVersion, testWeightPrecision, testKVCachePrecision, servingMode, prefillCfg, decodeCfg, modelSpecs, hfConfig, aicModels, testMoeQuantMode, testMoeEpSize, testMoeEtpSize]);
+  }, [model, gpu, inferenceBackend, testISL, testOSL, testConcurrentUsers, testResult, testTpSize, testPpSize, currentCatalogGpu, testPrefix, backendVersion, testWeightPrecision, testKVCachePrecision, servingMode, prefillCfg, decodeCfg, modelSpecs, hfConfig, catalogModels, testMoeQuantMode, testMoeEpSize, testMoeEtpSize]);
 
   // Copy API request body to clipboard
   const handleCopyAPIRequest = async () => {
@@ -1229,7 +1229,7 @@ export default function QuickEstimate() {
           </div>
 
           {/* Column 2: GPU target */}
-          <GpuSystemInput id="qe-gpu" value={gpu} onChange={setGpu} gpuOptions={aicGpus} />
+          <GpuSystemInput id="qe-gpu" value={gpu} onChange={setGpu} gpuOptions={catalogGpus} />
 
         </div>
         
@@ -1361,8 +1361,8 @@ export default function QuickEstimate() {
               {testErrorCode === 'OOM' ? 'Not enough GPU memory'
                 : testErrorCode === 'AUTH_REQUIRED' ? 'Authentication required'
                 : testErrorCode === 'MODEL_NOT_FOUND' ? 'Model not found'
-                : testErrorCode === 'AIC_TIMEOUT' ? 'Request timed out'
-                : testErrorCode === 'AIC_UNAVAILABLE' ? 'Sizing service unavailable'
+                : testErrorCode === 'AISIM_TIMEOUT' ? 'Request timed out'
+                : testErrorCode === 'AISIM_UNAVAILABLE' ? 'Sizing service unavailable'
                 : 'Estimate failed'}
             </div>
 
@@ -1384,7 +1384,7 @@ export default function QuickEstimate() {
                   <li>Accept the model&apos;s license on HuggingFace first</li>
                 </ul>
               </div>
-            ) : testErrorCode === 'AIC_TIMEOUT' ? (
+            ) : testErrorCode === 'AISIM_TIMEOUT' ? (
               <div style={{ fontSize: '14px', color: '#664d03', lineHeight: '1.6' }}>
                 The sizing engine took too long to respond. Try again, or use a smaller model or simpler configuration.
               </div>
@@ -1410,7 +1410,7 @@ export default function QuickEstimate() {
       {!testResult && !isCalculating && !testError}
       {isCalculating && (
         <div className={styles.card}>
-          <GpuChipLoader elapsed={elapsed} timeoutSeconds={aicTimeout} />
+          <GpuChipLoader elapsed={elapsed} timeoutSeconds={gatewayTimeout} />
         </div>
       )}
       {(testResult || isCalculating) && (
@@ -1426,7 +1426,7 @@ export default function QuickEstimate() {
                   {isDisagg ? 'disagg' : 'agg'}
                 </Label>
               </span>
-              <span className={styles.tileValue}>{Math.round(gpus)}<span className={styles.tileUnit}>× {currentAicGpu?.label || gpu}</span></span>
+              <span className={styles.tileValue}>{Math.round(gpus)}<span className={styles.tileUnit}>× {currentCatalogGpu?.label || gpu}</span></span>
               <span className={styles.tileSub}>
                 {testResult ? (
                   isDisagg ? (

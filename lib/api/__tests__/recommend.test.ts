@@ -208,16 +208,16 @@ describe('callRecommend', () => {
     expect(sentBody).not.toHaveProperty('model_config')
   })
 
-  it('returns AIC_NOT_CONFIGURED when API URL is missing', async () => {
+  it('returns AISIM_NOT_CONFIGURED when API URL is missing', async () => {
     vi.stubEnv('AISIMULATORS_GATEWAY_URL', '')
 
     const result = await callRecommend(VALID_REQUEST)
 
     expect(result.status).toBe('failed')
-    expect((result as RecommendErrorResponse).error.code).toBe('AIC_NOT_CONFIGURED')
+    expect((result as RecommendErrorResponse).error.code).toBe('AISIM_NOT_CONFIGURED')
   })
 
-  it('returns AIC_TIMEOUT on fetch timeout', async () => {
+  it('returns AISIM_TIMEOUT on fetch timeout', async () => {
     const timeoutError = new Error('signal timed out')
     timeoutError.name = 'TimeoutError'
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(timeoutError))
@@ -225,19 +225,19 @@ describe('callRecommend', () => {
     const result = await callRecommend(VALID_REQUEST)
 
     expect(result.status).toBe('failed')
-    expect((result as RecommendErrorResponse).error.code).toBe('AIC_TIMEOUT')
+    expect((result as RecommendErrorResponse).error.code).toBe('AISIM_TIMEOUT')
   })
 
-  it('returns AIC_UNAVAILABLE on network error', async () => {
+  it('returns AISIM_UNAVAILABLE on network error', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('fetch failed')))
 
     const result = await callRecommend(VALID_REQUEST)
 
     expect(result.status).toBe('failed')
-    expect((result as RecommendErrorResponse).error.code).toBe('AIC_UNAVAILABLE')
+    expect((result as RecommendErrorResponse).error.code).toBe('AISIM_UNAVAILABLE')
   })
 
-  it('returns AIC_UNAVAILABLE on 500', async () => {
+  it('returns AISIM_UNAVAILABLE on 500', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
@@ -247,10 +247,10 @@ describe('callRecommend', () => {
     const result = await callRecommend(VALID_REQUEST)
 
     expect(result.status).toBe('failed')
-    expect((result as RecommendErrorResponse).error.code).toBe('AIC_UNAVAILABLE')
+    expect((result as RecommendErrorResponse).error.code).toBe('AISIM_UNAVAILABLE')
   })
 
-  it('returns AIC_NO_CONFIGURATION on 422', async () => {
+  it('returns AISIM_NO_CONFIGURATION on 422', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
       status: 422,
@@ -260,10 +260,10 @@ describe('callRecommend', () => {
     const result = await callRecommend(VALID_REQUEST)
 
     expect(result.status).toBe('failed')
-    expect((result as RecommendErrorResponse).error.code).toBe('AIC_NO_CONFIGURATION')
+    expect((result as RecommendErrorResponse).error.code).toBe('AISIM_NO_CONFIGURATION')
   })
 
-  it('returns AIC_INVALID_RESPONSE on non-JSON response', async () => {
+  it('returns AISIM_INVALID_RESPONSE on non-JSON response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -273,16 +273,16 @@ describe('callRecommend', () => {
     const result = await callRecommend(VALID_REQUEST)
 
     expect(result.status).toBe('failed')
-    expect((result as RecommendErrorResponse).error.code).toBe('AIC_INVALID_RESPONSE')
+    expect((result as RecommendErrorResponse).error.code).toBe('AISIM_INVALID_RESPONSE')
   })
 
-  it('returns AIC_NO_CONFIGURATION when configs array is empty', async () => {
+  it('returns AISIM_NO_CONFIGURATION when configs array is empty', async () => {
     vi.stubGlobal('fetch', mockFetchOk({ configs: [], chosen_mode: 'agg' }))
 
     const result = await callRecommend(VALID_REQUEST)
 
     expect(result.status).toBe('failed')
-    expect((result as RecommendErrorResponse).error.code).toBe('AIC_NO_CONFIGURATION')
+    expect((result as RecommendErrorResponse).error.code).toBe('AISIM_NO_CONFIGURATION')
   })
 
   it('adds GPU_TOPOLOGY_MISMATCH warning when parallelism does not match GPU count', async () => {

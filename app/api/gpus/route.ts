@@ -9,7 +9,7 @@ import { formatGpuCatalogResponse } from '@/lib/api/responses'
 import type { GpuSpec } from '@/lib/gpu-math/gpus'
 
 // AISimulators /systems response schema
-interface AicSystem {
+interface CatalogSystem {
   id: string
   name: string
   vendor: string
@@ -21,8 +21,8 @@ interface AicSystem {
   gpus_per_node: number
 }
 
-interface AicSystemsResponse {
-  systems: AicSystem[]
+interface CatalogSystemsResponse {
+  systems: CatalogSystem[]
 }
 
 export async function GET(req: NextRequest) {
@@ -45,20 +45,20 @@ export async function GET(req: NextRequest) {
 
     // Fetch GPU catalog from AISimulators
     const gatewayUrl = process.env.AISIMULATORS_GATEWAY_URL || 'https://aisimulators.dev'
-    const aicResponse = await fetch(`${gatewayUrl}/systems?include=specs`, {
+    const gatewayResponse = await fetch(`${gatewayUrl}/systems?include=specs`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
       cache: 'no-store',
     })
 
-    if (!aicResponse.ok) {
-      throw new Error(`AISimulators API error: ${aicResponse.status}`)
+    if (!gatewayResponse.ok) {
+      throw new Error(`AISimulators API error: ${gatewayResponse.status}`)
     }
 
-    const aicData: AicSystemsResponse = await aicResponse.json()
+    const catalogData: CatalogSystemsResponse = await gatewayResponse.json()
 
     // Transform AISimulators systems to GpuSpec format
-    let filteredGpus: GpuSpec[] = aicData.systems.map((sys, idx) => {
+    let filteredGpus: GpuSpec[] = catalogData.systems.map((sys, idx) => {
       const vramGb = Math.round(sys.memory_bytes / (1024 ** 3))
       const memoryBandwidthTbps = sys.memory_bandwidth_bytes / (1024 ** 4)
 

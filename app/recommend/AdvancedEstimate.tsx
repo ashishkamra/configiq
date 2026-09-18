@@ -18,7 +18,7 @@ import styles from './AdvancedEstimate.module.css';
 import { fetchModelConfig } from '@/lib/huggingface/fetch-config';
 import { useRecommend } from '@/contexts/RecommendContext';
 import { isMoeConfig, type PhaseConfig } from '@/lib/api/recommend';
-import { useAicCatalog } from '@/lib/hooks/useAicCatalog';
+import { useCatalog } from '@/lib/hooks/useCatalog';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useCostings, resolveCloudRate } from '@/lib/hooks/useCostings';
 import { getAppConfig } from '@/lib/app-config';
@@ -157,11 +157,11 @@ function useCountUp(target: number, duration = 750, decimals = 0) {
 
 function friendlyErrorTitle(code: string | null): string {
   switch (code) {
-    case 'AIC_TIMEOUT': return 'Request timed out';
-    case 'AIC_NO_CONFIGURATION': return 'No valid configuration found';
-    case 'AIC_UNAVAILABLE': return 'Sizing service unavailable';
-    case 'AIC_NOT_CONFIGURED': return 'Service not configured';
-    case 'AIC_INVALID_RESPONSE': return 'Unexpected response';
+    case 'AISIM_TIMEOUT': return 'Request timed out';
+    case 'AISIM_NO_CONFIGURATION': return 'No valid configuration found';
+    case 'AISIM_UNAVAILABLE': return 'Sizing service unavailable';
+    case 'AISIM_NOT_CONFIGURED': return 'Service not configured';
+    case 'AISIM_INVALID_RESPONSE': return 'Unexpected response';
     case 'INVALID_REQUEST': return 'Invalid input';
     case 'NETWORK_ERROR': return 'Connection error';
     default: return 'Something went wrong';
@@ -170,15 +170,15 @@ function friendlyErrorTitle(code: string | null): string {
 
 function friendlyErrorMessage(code: string | null, raw: string): string {
   switch (code) {
-    case 'AIC_TIMEOUT':
+    case 'AISIM_TIMEOUT':
       return 'The AISimulators service took too long to respond. This can happen with complex configurations.';
-    case 'AIC_NO_CONFIGURATION':
+    case 'AISIM_NO_CONFIGURATION':
       return 'No valid GPU configuration found for this model and hardware combination.';
-    case 'AIC_UNAVAILABLE':
+    case 'AISIM_UNAVAILABLE':
       return 'The AISimulators service is temporarily unreachable. This is usually a transient issue.';
-    case 'AIC_NOT_CONFIGURED':
+    case 'AISIM_NOT_CONFIGURED':
       return 'The AISimulators service URL is not configured.';
-    case 'AIC_INVALID_RESPONSE':
+    case 'AISIM_INVALID_RESPONSE':
       return 'The sizing engine returned an unexpected response format.';
     case 'INVALID_REQUEST':
       return 'Some input values are missing or invalid. Please check your model name and parameters.';
@@ -191,11 +191,11 @@ function friendlyErrorMessage(code: string | null, raw: string): string {
 
 function friendlyErrorHint(code: string | null): string {
   switch (code) {
-    case 'AIC_TIMEOUT':
+    case 'AISIM_TIMEOUT':
       return 'Try again, or try a smaller model or simpler configuration.';
-    case 'AIC_NO_CONFIGURATION':
+    case 'AISIM_NO_CONFIGURATION':
       return 'Try a different GPU system, or reduce the input token length (ISL).';
-    case 'AIC_UNAVAILABLE':
+    case 'AISIM_UNAVAILABLE':
       return 'Wait a moment and try again.';
     case 'NETWORK_ERROR':
       return 'Check your connection and try again.';
@@ -211,11 +211,11 @@ function friendlyErrorHint(code: string | null): string {
 export default function AdvancedEstimate() {
   const { hydrated, hfToken, defaultModel: settingsDefaultModel, inferenceBackend, costingsEnabled, pricingSource, preferredCloudProvider } = useSettings();
   const costings = useCostings(costingsEnabled, pricingSource);
-  const { modelOptions: aicModels, gpuOptions: aicGpus, timeoutSeconds: aicTimeout, isLoading: catalogLoading } = useAicCatalog();
-  const MODEL_OPTIONS = aicModels;
+  const { modelOptions: catalogModels, gpuOptions: catalogGpus, timeoutSeconds: gatewayTimeout, isLoading: catalogLoading } = useCatalog();
+  const MODEL_OPTIONS = catalogModels;
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- hydrated gates config.json readiness
-  const modelItems: ComboBoxItem[] = React.useMemo(() => buildModelItems(aicModels), [aicModels, hydrated]);
+  const modelItems: ComboBoxItem[] = React.useMemo(() => buildModelItems(catalogModels), [catalogModels, hydrated]);
 
   // Input state
   const [model, setModel] = React.useState('');
@@ -313,7 +313,7 @@ export default function AdvancedEstimate() {
 
   // Model status check + fetch HF config. Catalog models resolve server-side;
   // everything else (incl. tested models outside the catalog) needs its HF
-  // config.json fetched and stored so it can be sent to AIC on calculate.
+  // config.json fetched and stored so it can be sent to AISimulators on calculate.
   React.useEffect(() => {
     if (catalogLoading) { setModelStatus('idle'); return; }
     setHfConfig(null);
@@ -335,7 +335,7 @@ export default function AdvancedEstimate() {
           // fetched the config from HF; others show the neutral "fetched".
           setModelStatus(isTested ? 'supported' : 'fetched');
         } else {
-          // Tested models stay blue — AIC can still resolve them from HF
+          // Tested models stay blue — AISimulators can still resolve them from HF
           // server-side when we send no model_config.
           setModelStatus(isTested ? 'supported' : 'error');
         }
@@ -346,7 +346,7 @@ export default function AdvancedEstimate() {
 
   // Fetch live pricing
 
-  const currentGpuOption = aicGpus.find(g => g.systemId === gpuSystem) ?? aicGpus[0] ?? null;
+  const currentGpuOption = catalogGpus.find(g => g.systemId === gpuSystem) ?? catalogGpus[0] ?? null;
 
   const [activePreset, setActivePreset] = React.useState<string>('default');
 
@@ -372,7 +372,7 @@ export default function AdvancedEstimate() {
       tpot, target_concurrency: targetConcurrency, prefix,
       ...(requestLatency != null ? { request_latency: requestLatency } : {}),
       backend: inferenceBackend,
-      // Send the HF config for models AIC can't resolve from its catalog.
+      // Send the HF config for models AISimulators can't resolve from its catalog.
       ...(needsHfConfig(model, MODEL_OPTIONS) && hfConfig ? { model_config: hfConfig } : {}),
     });
   };
@@ -424,7 +424,7 @@ export default function AdvancedEstimate() {
             />
           </div>
 
-          <GpuSystemInput id="adv-gpu" value={gpuSystem} onChange={setGpuSystem} gpuOptions={aicGpus} />
+          <GpuSystemInput id="adv-gpu" value={gpuSystem} onChange={setGpuSystem} gpuOptions={catalogGpus} />
         </div>
 
         {/* Calculate button */}
@@ -550,7 +550,7 @@ export default function AdvancedEstimate() {
       {/* ─── Loading ─── */}
       {isLoading && (
         <div className={styles.card}>
-          <GpuChipLoader elapsed={elapsed} timeoutSeconds={aicTimeout} />
+          <GpuChipLoader elapsed={elapsed} timeoutSeconds={gatewayTimeout} />
         </div>
       )}
 

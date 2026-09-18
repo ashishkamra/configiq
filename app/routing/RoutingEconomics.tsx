@@ -8,7 +8,7 @@ import { useCostings, resolveCloudRate } from '@/lib/hooks/useCostings'
 import { useSettings } from '@/contexts/SettingsContext'
 import { DEFAULT_TIERS } from '@/lib/routing/tier-defaults'
 import { type TierState, computeAllTiers, computeCostVolumePoints, findBreakeven } from '@/lib/routing/calc'
-import { useAicCatalog } from '@/lib/hooks/useAicCatalog'
+import { useCatalog } from '@/lib/hooks/useCatalog'
 import { getAppConfig } from '@/lib/app-config'
 import CostVolumeChart from './CostVolumeChart'
 import CompareTable from './CompareTable'
@@ -64,17 +64,17 @@ export default function RoutingEconomics() {
   const [compareOpen, setCompareOpen] = React.useState(false)
   const [flipped, setFlipped] = React.useState<Record<string, boolean>>({})
   const [tiers, setTiers] = React.useState<TierState[]>(initTiers)
-  const { modelOptions: aicModels, gpuOptions: aicGpus } = useAicCatalog()
+  const { modelOptions: catalogModels, gpuOptions: catalogGpus } = useCatalog()
   const { costingsEnabled, preferredCloudProvider, pricingSource } = useSettings()
   const costings = useCostings(costingsEnabled, pricingSource)
 
-  const OPEN_MODELS = React.useMemo(() => aicModels.map(id => ({
+  const OPEN_MODELS = React.useMemo(() => catalogModels.map(id => ({
     id,
     name: id.split('/').pop() ?? id,
     vendor: inferVendor(id),
   })).filter(m =>
     ['Meta', 'Mistral', 'Google', 'Qwen', 'DeepSeek', 'NVIDIA', 'MiniMax', 'Moonshot'].includes(m.vendor)
-  ), [aicModels])
+  ), [catalogModels])
 
 
   const getRate = React.useCallback(
@@ -275,7 +275,7 @@ export default function RoutingEconomics() {
                         onChange={(_e, val) => { updateTier(tier.id, { gpuType: val }) }}
                         aria-label="GPU type"
                       >
-                        {aicGpus.map(g => (
+                        {catalogGpus.map(g => (
                           <FormSelectOption key={g.systemId} value={g.systemId} label={`${g.label}${g.vramGb ? ` — ${g.vramGb} GB` : ''}`} />
                         ))}
                       </FormSelect>

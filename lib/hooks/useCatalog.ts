@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DEFAULT_AIC_TIMEOUT_SECONDS } from '@/lib/api/timeout'
+import { DEFAULT_GATEWAY_TIMEOUT_SECONDS } from '@/lib/api/timeout'
 
 export interface GpuOption {
   systemId: string
@@ -14,7 +14,7 @@ export interface GpuOption {
   tdpWatts: number | null
   gpusPerNode: number | null
   /** Fraction of GPU memory available for the model + KV cache.
-   *  TODO: replace with per-backend value from AIC /memory response. */
+   *  TODO: replace with per-backend value from AISimulators /memory response. */
   gpuMemoryUtilization: number
 }
 
@@ -40,12 +40,12 @@ export interface ModelSpec {
   architecture: string | null
 }
 
-export interface AicCatalog {
+export interface Catalog {
   gpuOptions: GpuOption[]
   modelOptions: string[]
   modelSpecs: Map<string, ModelSpec>
-  /** Effective AIC request timeout (seconds) reported by the server; falls back
-   *  to DEFAULT_AIC_TIMEOUT_SECONDS until the catalog resolves. */
+  /** Effective AISimulators request timeout (seconds) reported by the server; falls back
+   *  to DEFAULT_GATEWAY_TIMEOUT_SECONDS until the catalog resolves. */
   timeoutSeconds: number
   isLoading: boolean
   error: string | null
@@ -76,7 +76,7 @@ const CACHE_TTL_MS = 10 * 60 * 1000
 let cachedGpus: GpuOption[] | null = null
 let cachedModels: string[] | null = null
 let cachedModelSpecs: Map<string, ModelSpec> | null = null
-let cachedTimeoutSeconds: number = DEFAULT_AIC_TIMEOUT_SECONDS
+let cachedTimeoutSeconds: number = DEFAULT_GATEWAY_TIMEOUT_SECONDS
 let cacheTimestamp: number | null = null
 let fetchPromise: Promise<void> | null = null
 
@@ -85,7 +85,7 @@ function isCacheValid(): boolean {
     cacheTimestamp !== null && Date.now() - cacheTimestamp < CACHE_TTL_MS
 }
 
-export function useAicCatalog(): AicCatalog {
+export function useCatalog(): Catalog {
   const [gpuOptions, setGpuOptions] = useState<GpuOption[]>(isCacheValid() ? cachedGpus! : [])
   const [modelOptions, setModelOptions] = useState<string[]>(isCacheValid() ? cachedModels! : [])
   const [modelSpecs, setModelSpecs] = useState<Map<string, ModelSpec>>(isCacheValid() ? cachedModelSpecs! : new Map())
@@ -134,7 +134,7 @@ export function useAicCatalog(): AicCatalog {
           }
 
           if (gpus.length === 0 || modelList.length === 0) {
-            throw new Error('AIC returned empty catalog')
+            throw new Error('AISimulators returned empty catalog')
           }
 
           cachedGpus = gpus

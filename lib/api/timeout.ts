@@ -2,10 +2,10 @@
 //
 // The default must stay in sync with nginx's proxy_read_timeout for the webapp
 // (see configiq-deploy/deploy.sh) — nginx must outlast this so a slow request
-// surfaces the app's AIC_TIMEOUT rather than a bare 504.
+// surfaces the app's AISIM_TIMEOUT rather than a bare 504.
 
 /** Default AISimulators timeout (seconds) when the env var is unset. */
-export const DEFAULT_AIC_TIMEOUT_SECONDS = 90
+export const DEFAULT_GATEWAY_TIMEOUT_SECONDS = 90
 
 /**
  * Resolve the configured AISimulators timeout in seconds, honoring the
@@ -16,7 +16,7 @@ export const DEFAULT_AIC_TIMEOUT_SECONDS = 90
  * callers with a different baseline (e.g. the catalog fetch's 30s) share this
  * validation. Server-side only (reads process.env).
  */
-export function aicTimeoutSeconds(defaultSeconds: number = DEFAULT_AIC_TIMEOUT_SECONDS): number {
+export function gatewayTimeoutSeconds(defaultSeconds: number = DEFAULT_GATEWAY_TIMEOUT_SECONDS): number {
   // Number() (not parseInt) so partial values like "1.5" or "90seconds" are
   // rejected rather than truncated; only a whole positive number is honored.
   const parsed = Number(process.env.AISIMULATORS_TIMEOUT_SECONDS)
