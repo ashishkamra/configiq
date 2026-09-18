@@ -16,9 +16,16 @@ import { gatewayTimeoutSeconds } from '@/lib/api/timeout'
 const DEFAULT_TIMEOUT_SECONDS = 30
 
 export async function GET() {
-  // Dev default mirrors app/api/gpus/route.ts so local dev works without the
-  // gateway env set; production sets AISIMULATORS_GATEWAY_URL per host.
-  const baseUrl = process.env.AISIMULATORS_GATEWAY_URL || 'https://aisimulators.dev'
+  // Require the gateway to be configured; fail loud (like /recommend) rather
+  // than silently falling back to the public domain, which masks a misconfig
+  // and bypasses the intended per-host internal gateway.
+  const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
+  if (!baseUrl) {
+    return NextResponse.json(
+      { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
+      { status: 503, headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } },
+    )
+  }
   // Shares the shared resolver's positive-integer validation, with the catalog
   // fetch's own 30s baseline (a negative env value would break AbortSignal).
   const timeoutSeconds = gatewayTimeoutSeconds(DEFAULT_TIMEOUT_SECONDS)

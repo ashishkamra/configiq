@@ -43,8 +43,16 @@ export async function GET(req: NextRequest) {
 
     const validatedQuery = GpuCatalogQuerySchema.parse(query)
 
-    // Fetch GPU catalog from AISimulators
-    const gatewayUrl = process.env.AISIMULATORS_GATEWAY_URL || 'https://aisimulators.dev'
+    // Fetch GPU catalog from AISimulators. Require the gateway to be configured;
+    // fail loud rather than falling back to the public domain (masks a misconfig
+    // and bypasses the per-host internal gateway).
+    const gatewayUrl = process.env.AISIMULATORS_GATEWAY_URL
+    if (!gatewayUrl) {
+      return NextResponse.json(
+        { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
+        { status: 503 },
+      )
+    }
     const gatewayResponse = await fetch(`${gatewayUrl}/systems?include=specs`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
