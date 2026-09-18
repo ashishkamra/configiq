@@ -80,6 +80,11 @@ export default function HomePage() {
               LLM inference sizing, GPU comparison, and cost modeling for
               engineers and infrastructure teams.
             </Text>
+            <Text component="small" style={{ fontStyle: "italic" }}>
+              A free community service, provided as-is without warranty. All
+              results are best-effort estimates for planning, not guarantees of
+              real-world performance.
+            </Text>
           </TextContent>
         </div>
       </PageSection>
