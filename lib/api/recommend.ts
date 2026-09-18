@@ -167,7 +167,7 @@ export async function callRecommend(
   const requestId = generateRequestId()
   const startTime = performance.now()
 
-  const baseUrl = process.env.AICONFIGURATOR_GATEWAY_URL
+  const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
   const timeoutSeconds = aicTimeoutSeconds()
 
   if (!baseUrl) {

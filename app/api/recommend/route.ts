@@ -14,7 +14,7 @@ const ERROR_STATUS_MAP: Record<string, number> = {
 }
 
 async function proxyToAic(body: Record<string, unknown>, include: string): Promise<NextResponse> {
-  const baseUrl = process.env.AICONFIGURATOR_GATEWAY_URL
+  const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
   const timeoutSeconds = aicTimeoutSeconds()
 
   if (!baseUrl) {

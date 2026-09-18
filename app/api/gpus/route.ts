@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     const validatedQuery = GpuCatalogQuerySchema.parse(query)
 
     // Fetch GPU catalog from AIConfigurator
-    const gatewayUrl = process.env.AICONFIGURATOR_GATEWAY_URL || 'https://aiconfigurator.dev'
+    const gatewayUrl = process.env.AISIMULATORS_GATEWAY_URL || 'https://aiconfigurator.dev'
     const aicResponse = await fetch(`${gatewayUrl}/systems?include=specs`, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },

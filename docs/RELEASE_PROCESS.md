@@ -80,7 +80,7 @@ to install the exact fork artifacts regardless of what PyPI serves.
 To move to a new SDK build, update the two wheel URLs — keep them **identical in
 both files** — in lockstep:
 
-1. `services/aiconfigurator/pyproject.toml` — the `aiconfigurator @ …` and
+1. `services/aisimulators/pyproject.toml` — the `aiconfigurator @ …` and
    `aiconfigurator-core @ …` entries in `[project.dependencies]`.
 2. `services/aicostings/pyproject.toml` — the same two entries.
 

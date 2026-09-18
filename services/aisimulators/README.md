@@ -31,7 +31,7 @@ wheel is amd64-only, so build for `linux/amd64` (emulated on Apple Silicon):
 
 ```bash
 docker build --platform linux/amd64 \
-  -f services/aiconfigurator/Containerfile -t aiconfigurator services/
+  -f services/aisimulators/Containerfile -t aiconfigurator services/
 docker run --rm -p 7860:7860 aiconfigurator
 curl http://localhost:7860/systems
 ```
@@ -48,7 +48,7 @@ The `aiconfigurator-core` wheel pinned in `pyproject.toml` is amd64-only, so thi
 works on a `linux/amd64` host:
 
 ```bash
-cd services/aiconfigurator
+cd services/aisimulators
 uv venv && uv pip install -e . --group dev
 uv run pytest          # tests mock the SDK; no perf DB required
 uv run ruff check .

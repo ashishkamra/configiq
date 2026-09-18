@@ -50,15 +50,15 @@ jobs:
           enable-cache: true
 
       - name: Sync dependencies
-        working-directory: services/aiconfigurator
+        working-directory: services/aisimulators
         run: uv sync --extra otel --extra mcp
 
       - name: Lint
-        working-directory: services/aiconfigurator
+        working-directory: services/aisimulators
         run: uv run ruff check .
 
       - name: Test
-        working-directory: services/aiconfigurator
+        working-directory: services/aisimulators
         run: uv run pytest
 
   aicostings:

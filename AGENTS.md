@@ -7,7 +7,7 @@ Read this before making any changes.
 
 ConfigIQ is a web application for LLM inference sizing, GPU comparison, and
 cost modeling. It is deployed at configiq.dev and uses the AIConfigurator
-REST API (server URL set via `AICONFIGURATOR_GATEWAY_URL`, e.g.
+REST API (server URL set via `AISIMULATORS_GATEWAY_URL`, e.g.
 `https://aiconfigurator.dev`) for GPU recommendations and memory estimation.
 
 ## Tech stack

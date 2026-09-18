@@ -111,7 +111,7 @@ export function useAicCatalog(): AicCatalog {
       if (!fetchPromise) {
         fetchPromise = (async () => {
           // Same-origin proxy (app/api/catalog) resolves the per-host gateway
-          // server-side, so no build-time NEXT_PUBLIC_AICONFIGURATOR_API_URL.
+          // server-side, so no build-time NEXT_PUBLIC_AISIMULATORS_API_URL.
           const res = await fetch('/api/catalog')
           if (!res.ok) throw new Error(`Catalog fetch failed (${res.status})`)
 

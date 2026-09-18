@@ -63,7 +63,7 @@ export async function callKvCacheCalc(
   const requestId = generateKvRequestId()
   const startTime = performance.now()
 
-  const baseUrl = process.env.AICONFIGURATOR_GATEWAY_URL
+  const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
   const timeoutSeconds = aicTimeoutSeconds()
 
   if (!baseUrl) {

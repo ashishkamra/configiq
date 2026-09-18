@@ -31,12 +31,12 @@ jobs:
             file: ./Containerfile
             image: ghcr.io/redhat-performance/configiq
             build-args: |
-              NEXT_PUBLIC_AICONFIGURATOR_API_URL=https://aiconfigurator.dev
+              NEXT_PUBLIC_AISIMULATORS_API_URL=https://aiconfigurator.dev
           # The two Python services build from the services/ context so their
           # images can pull in the shared configiq-py package.
           - name: aiconfigurator
             context: services
-            file: services/aiconfigurator/Containerfile
+            file: services/aisimulators/Containerfile
             image: ghcr.io/redhat-performance/aiconfigurator
             build-args: ""
           - name: aicostings

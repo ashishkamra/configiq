@@ -9,7 +9,7 @@ export const DEFAULT_AIC_TIMEOUT_SECONDS = 90
 
 /**
  * Resolve the configured AIConfigurator timeout in seconds, honoring the
- * AICONFIGURATOR_TIMEOUT_SECONDS env var and falling back to `defaultSeconds`.
+ * AISIMULATORS_TIMEOUT_SECONDS env var and falling back to `defaultSeconds`.
  * Only a positive integer is accepted; anything else (negative, zero,
  * non-integer, or unparseable) uses the fallback — a negative value would make
  * AbortSignal.timeout() throw and fail every request. `defaultSeconds` lets
@@ -19,6 +19,6 @@ export const DEFAULT_AIC_TIMEOUT_SECONDS = 90
 export function aicTimeoutSeconds(defaultSeconds: number = DEFAULT_AIC_TIMEOUT_SECONDS): number {
   // Number() (not parseInt) so partial values like "1.5" or "90seconds" are
   // rejected rather than truncated; only a whole positive number is honored.
-  const parsed = Number(process.env.AICONFIGURATOR_TIMEOUT_SECONDS)
+  const parsed = Number(process.env.AISIMULATORS_TIMEOUT_SECONDS)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : defaultSeconds
 }

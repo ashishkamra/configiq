@@ -126,7 +126,7 @@ describe('RecommendRequestSchema', () => {
 
 describe('callRecommend', () => {
   beforeEach(() => {
-    vi.stubEnv('AICONFIGURATOR_GATEWAY_URL', 'https://aiconfigurator.dev')
+    vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'https://aiconfigurator.dev')
   })
 
   afterEach(() => {
@@ -209,7 +209,7 @@ describe('callRecommend', () => {
   })
 
   it('returns AIC_NOT_CONFIGURED when API URL is missing', async () => {
-    vi.stubEnv('AICONFIGURATOR_GATEWAY_URL', '')
+    vi.stubEnv('AISIMULATORS_GATEWAY_URL', '')
 
     const result = await callRecommend(VALID_REQUEST)
 

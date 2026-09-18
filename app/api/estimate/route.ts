@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { aicTimeoutSeconds } from '@/lib/api/timeout'
 
 export async function POST(req: NextRequest) {
-  const baseUrl = process.env.AICONFIGURATOR_GATEWAY_URL
+  const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
   const timeoutSeconds = aicTimeoutSeconds()
 
   if (!baseUrl) {

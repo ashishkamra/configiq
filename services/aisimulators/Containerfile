@@ -1,9 +1,9 @@
-# AIConfigurator REST API service.
+# AISimulators REST API service.
 #
 # Build context is services/ (not this directory) so the image can pull in the
 # shared configiq-py package alongside this service. Build from the repo root:
 #
-#   podman build -f services/aiconfigurator/Containerfile -t aiconfigurator services/
+#   podman build -f services/aisimulators/Containerfile -t aisimulators services/
 #
 # Unlike the aiconfigurator monorepo's Containerfile (a multi-stage Rust/maturin
 # wheel *builder*), this image just installs the already-published aiconfigurator
@@ -41,11 +41,11 @@ RUN /opt/venv/bin/pip install --no-cache-dir "/src/configiq-py[otel,mcp]"
 # pyproject.toml references by exact fork-release wheel URL. Copy pyproject.toml
 # alone first so this layer only rebuilds when the deps change. `python` here is
 # the venv's (PATH=/opt/venv/bin), so pip installs into /opt/venv.
-COPY scripts/install-deps.py aiconfigurator/pyproject.toml /tmp/
+COPY scripts/install-deps.py aisimulators/pyproject.toml /tmp/
 RUN python /tmp/install-deps.py /tmp/pyproject.toml
 
 # Thin REST wrapper. CMD imports it as api_service.app:app.
-COPY aiconfigurator/tools/api_service /app/api_service
+COPY aisimulators/tools/api_service /app/api_service
 
 # OpenShift / rootless compatibility: numeric UID 1001, group 0 (root group),
 # group-writable so an arbitrary assigned UID can still write.

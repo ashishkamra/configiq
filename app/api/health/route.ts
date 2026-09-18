@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const gatewayUrl = process.env.AICONFIGURATOR_GATEWAY_URL;
+  const gatewayUrl = process.env.AISIMULATORS_GATEWAY_URL;
 
   // Require explicit gateway URL configuration
   if (!gatewayUrl) {
