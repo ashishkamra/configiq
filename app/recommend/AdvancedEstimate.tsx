@@ -6,13 +6,12 @@ import MicrochipIcon from '@patternfly/react-icons/dist/esm/icons/microchip-icon
 import MemoryIcon from '@patternfly/react-icons/dist/esm/icons/memory-icon';
 import ClockIcon from '@patternfly/react-icons/dist/esm/icons/clock-icon';
 import TachometerAltIcon from '@patternfly/react-icons/dist/esm/icons/tachometer-alt-icon';
-import EyeIcon from '@patternfly/react-icons/dist/esm/icons/eye-icon';
-import EyeSlashIcon from '@patternfly/react-icons/dist/esm/icons/eye-slash-icon';
 import ExclamationTriangleIcon from '@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon';
 import CheckCircleIcon from '@patternfly/react-icons/dist/esm/icons/check-circle-icon';
 import DollarSignIcon from '@patternfly/react-icons/dist/esm/icons/dollar-sign-icon';
 import { InfoStrip, InfoStripAction } from '@/components/ui/InfoStrip';
 import { DebugPanel } from '@/components/DebugPanel/DebugPanel';
+import { ErrorPanel } from '@/components/ui/ErrorPanel';
 
 import styles from './AdvancedEstimate.module.css';
 import { fetchModelConfig } from '@/lib/huggingface/fetch-config';
@@ -151,59 +150,6 @@ function useCountUp(target: number, duration = 750, decimals = 0) {
   }, [target, duration]);
   const factor = Math.pow(10, decimals);
   return Math.round(val * factor) / factor;
-}
-
-// ─── Friendly error messages ────────────────────────────────────────────────
-
-function friendlyErrorTitle(code: string | null): string {
-  switch (code) {
-    case 'AIC_TIMEOUT': return 'Request timed out';
-    case 'AIC_NO_CONFIGURATION': return 'No valid configuration found';
-    case 'AIC_UNAVAILABLE': return 'Sizing service unavailable';
-    case 'AIC_NOT_CONFIGURED': return 'Service not configured';
-    case 'AIC_INVALID_RESPONSE': return 'Unexpected response';
-    case 'INVALID_REQUEST': return 'Invalid input';
-    case 'NETWORK_ERROR': return 'Connection error';
-    default: return 'Something went wrong';
-  }
-}
-
-function friendlyErrorMessage(code: string | null, raw: string): string {
-  switch (code) {
-    case 'AIC_TIMEOUT':
-      return 'The AIConfigurator service took too long to respond. This can happen with complex configurations.';
-    case 'AIC_NO_CONFIGURATION':
-      return 'No valid GPU configuration found for this model and hardware combination.';
-    case 'AIC_UNAVAILABLE':
-      return 'The AIConfigurator service is temporarily unreachable. This is usually a transient issue.';
-    case 'AIC_NOT_CONFIGURED':
-      return 'The AIConfigurator service URL is not configured.';
-    case 'AIC_INVALID_RESPONSE':
-      return 'The sizing engine returned an unexpected response format.';
-    case 'INVALID_REQUEST':
-      return 'Some input values are missing or invalid. Please check your model name and parameters.';
-    case 'NETWORK_ERROR':
-      return 'Could not reach a REST API service or it took too long to respond.';
-    default:
-      return raw;
-  }
-}
-
-function friendlyErrorHint(code: string | null): string {
-  switch (code) {
-    case 'AIC_TIMEOUT':
-      return 'Try again, or try a smaller model or simpler configuration.';
-    case 'AIC_NO_CONFIGURATION':
-      return 'Try a different GPU system, or reduce the input token length (ISL).';
-    case 'AIC_UNAVAILABLE':
-      return 'Wait a moment and try again.';
-    case 'NETWORK_ERROR':
-      return 'Check your connection and try again.';
-    case 'INVALID_REQUEST':
-      return 'Make sure the model name is a valid Hugging Face ID (e.g. meta-llama/Llama-3.1-70B-Instruct).';
-    default:
-      return 'If this persists, try a different model or GPU combination.';
-  }
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -555,15 +501,7 @@ export default function AdvancedEstimate() {
       )}
 
       {/* ─── Error ─── */}
-      {error && (
-        <div className={styles.errorWrap}>
-          <div className={styles.errorTitle}>
-            <ExclamationTriangleIcon /> {friendlyErrorTitle(errorCode)}
-          </div>
-          <div className={styles.errorMsg}>{friendlyErrorMessage(errorCode, error)}</div>
-          <div className={styles.errorHint}>{friendlyErrorHint(errorCode)}</div>
-        </div>
-      )}
+      {error && <ErrorPanel error={error} errorCode={errorCode} />}
 
       {/* ─── Result tiles ─── */}
       {result && (

@@ -1,0 +1,24 @@
+.errorWrap {
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: #fdf0f0;
+  border: 1px solid #c9190b;
+  border-left-width: 4px;
+  border-radius: var(--radius);
+}
+.errorTitle {
+  font-weight: 600;
+  color: #c9190b;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+.errorMsg {
+  font-size: 14px;
+  color: var(--t2);
+}
+.errorHint {
+  font-size: 13px;
+  color: var(--t3);
+  margin-top: 6px;
+  font-style: italic;
+}
