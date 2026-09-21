@@ -1,14 +1,15 @@
 'use client'
 
 import * as React from 'react'
-import { Alert, Label, Spinner } from '@patternfly/react-core'
+import { Label, Spinner } from '@patternfly/react-core'
 import CheckCircleIcon from '@patternfly/react-icons/dist/esm/icons/check-circle-icon'
 import { formatBytes } from '@/lib/utils/format'
 import { useCountUp } from '@/app/performance/quickEstimateHelpers'
 import { useAicCatalog } from '@/lib/hooks/useAicCatalog'
 import { useSettings, type InferenceBackend } from '@/contexts/SettingsContext'
+import { useKvCache, type PhaseResult } from '@/contexts/KvCacheContext'
 import { getAppConfig } from '@/lib/app-config'
-import { ModelInput, type ModelStatus } from '@/components/ui/ModelInput';
+import { ErrorPanel } from '@/components/ui/ErrorPanel';
 import { ComboBox, type ComboBoxItem } from '@/components/ModelComboBox/ModelComboBox';
 import { buildModelItems, needsHfConfig } from '@/lib/model-options';
 import { fetchModelConfig } from '@/lib/huggingface/fetch-config';
@@ -32,12 +33,6 @@ interface PhaseParallelInput {
   pp: string
   moeTp: string
   moeEp: string
-}
-
-/** A computed KV-cache result tagged with its pool label ('' for agg). */
-interface PhaseResult {
-  label: string
-  result: KvCacheCalcResult
 }
 
 /** Parallelism fields sent to /api/memory for one pool. */
@@ -64,8 +59,6 @@ function invalidPhaseParallel(p: PhaseParallelInput): boolean {
 export default function KvCacheCalc() {
   const { hydrated, hfToken, defaultModel: settingsDefaultModel, inferenceBackend, backendVersion: settingsBackendVersion } = useSettings()
   const { modelOptions: aicModels, gpuOptions: aicGpus, isLoading: catalogLoading } = useAicCatalog()
-  const MODEL_OPTIONS = aicModels
-
   const [model, setModel] = React.useState('')
   const [system, setSystem] = React.useState(() => getAppConfig().defaultSystem)
   const [backend, setBackend] = React.useState(() => getAppConfig().defaultBackend)
@@ -96,14 +89,8 @@ export default function KvCacheCalc() {
   const [memFractionKind, setMemFractionKind] = React.useState('of_total')
   const [memFractionValue, setMemFractionValue] = React.useState(1.0)
   const [advancedOpen, setAdvancedOpen] = React.useState(false)
-  const [loading, setLoading] = React.useState(false)
-  const [results, setResults] = React.useState<PhaseResult[]>([])
-  const [error, setError] = React.useState<string | null>(null)
+  const { isLoading: loading, results, error, errorCode, debugRequest, debugResponse, debugStatus, debugDuration, startCalc } = useKvCache()
   const [debugOpen, setDebugOpen] = React.useState(false)
-  const [debugRequest, setDebugRequest] = React.useState<Record<string, unknown> | Record<string, unknown>[] | null>(null)
-  const [debugResponse, setDebugResponse] = React.useState<Record<string, unknown> | Record<string, unknown>[] | null>(null)
-  const [debugStatus, setDebugStatus] = React.useState<number | null>(null)
-  const [debugDuration, setDebugDuration] = React.useState<number | null>(null)
 
   const [maxNumTokensInput, setMaxNumTokensInput] = React.useState('8192')
   const [maxBatchSizeInput, setMaxBatchSizeInput] = React.useState('128')
@@ -175,13 +162,6 @@ export default function KvCacheCalc() {
     if (Number.isFinite(n) && n >= 0 && n <= 1) setMemFractionValue(n);
   };
 
-  const catalogMatch = MODEL_OPTIONS.includes(model)
-  const kvModelStatus: ModelStatus = getAppConfig().testedModels.includes(model)
-    ? 'supported'
-    : catalogMatch ? 'catalog'
-    : catalogLoading ? 'fetching'
-    : model ? 'idle' : 'idle'
-
   function buildRequestBody(par: PhaseParallel): Record<string, unknown> {
     const body: Record<string, unknown> = {
       model_path: model,
@@ -201,14 +181,7 @@ export default function KvCacheCalc() {
     return body
   }
 
-  async function handleCalculate() {
-    setLoading(true)
-    setError(null)
-    setResults([])
-
-    // One request per pool. Agg is a single unlabelled pool; disagg fans out to
-    // prefill + decode, each with its own parallelism, against the same /memory
-    // endpoint (which already takes tp/pp/moe dims).
+  function handleCalculate() {
     const phases: { label: string; par: PhaseParallel }[] = servingMode === 'disagg'
       ? [
           { label: 'Prefill', par: parsePhaseParallel(prefillPar) },
@@ -217,44 +190,7 @@ export default function KvCacheCalc() {
       : [{ label: '', par: { tp: tpSize, pp: ppSize, moeTp: parseInt(moeTpSize, 10) || 0, moeEp: parseInt(moeEpSize, 10) || 0 } }]
 
     const requestBodies = phases.map(ph => ({ label: ph.label, body: buildRequestBody(ph.par) }))
-    setDebugRequest(servingMode === 'disagg' ? requestBodies : requestBodies[0].body)
-    setDebugResponse(null)
-    setDebugStatus(null)
-    setDebugDuration(null)
-
-    const t0 = performance.now()
-
-    try {
-      const responses = await Promise.all(
-        requestBodies.map(async ({ label, body }) => {
-          const res = await fetch('/api/memory', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-          })
-          const data = await res.json()
-          return { label, status: res.status, data }
-        }),
-      )
-
-      const failed = responses.find(r => r.data?.status === 'failed')
-
-      setDebugResponse(servingMode === 'disagg' ? responses.map(r => r.data) : responses[0].data)
-      setDebugStatus(failed?.status ?? responses[responses.length - 1].status)
-      setDebugDuration(Math.round(performance.now() - t0))
-
-      if (failed) {
-        setError(failed.data.error?.message ?? 'An unexpected error occurred')
-        return
-      }
-
-      setResults(responses.map(r => ({ label: r.label, result: r.data as KvCacheCalcResult })))
-    } catch {
-      setDebugDuration(Math.round(performance.now() - t0))
-      setError('Failed to connect to the server. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+    startCalc(requestBodies, servingMode === 'disagg')
   }
 
   return (
@@ -372,7 +308,7 @@ export default function KvCacheCalc() {
               <button
                 type="button"
                 className={`${styles.modeButton} ${servingMode === 'agg' ? styles.modeButtonActive : ''}`}
-                onClick={() => { setServingMode('agg'); setResults([]); }}
+                onClick={() => setServingMode('agg')}
                 aria-pressed={servingMode === 'agg'}
               >
                 Aggregated
@@ -380,7 +316,7 @@ export default function KvCacheCalc() {
               <button
                 type="button"
                 className={`${styles.modeButton} ${servingMode === 'disagg' ? styles.modeButtonActive : ''}`}
-                onClick={() => { setServingMode('disagg'); setResults([]); }}
+                onClick={() => setServingMode('disagg')}
                 aria-pressed={servingMode === 'disagg'}
               >
                 Disaggregated
@@ -477,20 +413,7 @@ export default function KvCacheCalc() {
       </div>
 
       {/* Error */}
-      {error && (
-        <div className={styles.errorAlert}>
-          <Alert variant={error.toLowerCase().includes('unsupported') ? 'warning' : 'danger'} title="Calculation failed" isInline>
-            <p>{error}</p>
-            <p style={{ marginTop: 8 }}>
-              You can also try using our{' '}
-              <a href="/performance" className={styles.errorLink}>
-                Performance estimate
-              </a>{' '}
-              for an approximate KV cache calculation.
-            </p>
-          </Alert>
-        </div>
-      )}
+      {error && <ErrorPanel error={error} errorCode={errorCode} />}
 
       {/* Loading */}
       {loading && (

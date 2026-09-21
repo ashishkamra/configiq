@@ -7,6 +7,7 @@ export function friendlyErrorTitle(code: string | null): string {
     case 'AIC_NO_CONFIGURATION': return 'No valid configuration found';
     case 'AIC_UNAVAILABLE': return 'Sizing service unavailable';
     case 'AIC_NOT_CONFIGURED': return 'Service not configured';
+    case 'AIC_UNSUPPORTED': return 'Configuration does not fit';
     case 'AIC_INVALID_RESPONSE': return 'Unexpected response';
     case 'INVALID_REQUEST': return 'Invalid input';
     case 'NETWORK_ERROR': return 'Connection error';
@@ -24,6 +25,8 @@ export function friendlyErrorMessage(code: string | null, raw: string): string {
       return 'The AIConfigurator service is temporarily unreachable. This is usually a transient issue.';
     case 'AIC_NOT_CONFIGURED':
       return 'The AIConfigurator service URL is not configured.';
+    case 'AIC_UNSUPPORTED':
+      return 'This model and hardware combination is not supported, or the model is too large to fit on the selected GPU.';
     case 'AIC_INVALID_RESPONSE':
       return 'The sizing engine returned an unexpected response format.';
     case 'INVALID_REQUEST':
@@ -43,6 +46,8 @@ export function friendlyErrorHint(code: string | null): string {
       return 'Try a different GPU system, or reduce the input token length (ISL).';
     case 'AIC_UNAVAILABLE':
       return 'Wait a moment and try again.';
+    case 'AIC_UNSUPPORTED':
+      return 'Try a GPU with more memory, reduce parallelism, or use a smaller/quantized model.';
     case 'NETWORK_ERROR':
       return 'Check your connection and try again.';
     case 'INVALID_REQUEST':

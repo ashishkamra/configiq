@@ -41,6 +41,7 @@ import "./globals.css";
 import "./theme.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { RecommendProvider } from "@/contexts/RecommendContext";
+import { KvCacheProvider } from "@/contexts/KvCacheContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 
 const redHatDisplay = Red_Hat_Display({
@@ -90,9 +91,11 @@ export default function RootLayout({
       </head>
       <body>
         <RecommendProvider>
-          <SettingsProvider>
-            <AppShell>{children}</AppShell>
-          </SettingsProvider>
+          <KvCacheProvider>
+            <SettingsProvider>
+              <AppShell>{children}</AppShell>
+            </SettingsProvider>
+          </KvCacheProvider>
         </RecommendProvider>
       </body>
     </html>
