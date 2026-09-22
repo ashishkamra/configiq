@@ -33,6 +33,9 @@ three publish — the tag is all-or-nothing across all three.
 
 3. **GitHub Actions automatically**:
    - Triggers the build workflow (`.github/workflows/build.yml`)
+   - Creates the GitHub release and generates categorized release notes from
+     merged pull requests (`.github/workflows/release.yml` and
+     `.github/release.yml`)
    - Builds **all three** container images (see Overview)
    - Pushes each to GHCR with matching tags:
      - `ghcr.io/redhat-performance/{configiq,aisimulators,aicostings}:X.Y.Z` (specific version)
