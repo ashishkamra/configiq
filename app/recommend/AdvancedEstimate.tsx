@@ -27,6 +27,7 @@ import { ModelInput } from '@/components/ui/ModelInput';
 import { ComboBox, type ComboBoxItem } from '@/components/ModelComboBox/ModelComboBox';
 import { buildModelItems, needsHfConfig } from '@/lib/model-options';
 import { GpuSystemInput } from '@/components/ui/GpuSystemInput';
+import { CostAnalysisModal } from './CostAnalysisModal';
 
 function modelSuggestions(): string {
   const names = getAppConfig().suggestedModelNames;
@@ -243,6 +244,7 @@ export default function AdvancedEstimate() {
   // GPU sizer (persistent across navigation)
   const { isLoading, result, error, errorCode, elapsed, debugRequest, debugResponse, debugStatus, debugDuration, startSizing } = useRecommend();
   const [debugOpen, setDebugOpen] = React.useState(false);
+  const [costAnalysisOpen, setCostAnalysisOpen] = React.useState(false);
 
   // Additional constraints accordion
   const [expanded, setExpanded] = React.useState<string[]>(['perf']);
@@ -766,6 +768,10 @@ export default function AdvancedEstimate() {
             )}
           </div>
 
+          <div style={{ marginBottom: 24 }}>
+            <Button variant="link" onClick={() => setCostAnalysisOpen(true)}>Analyze self-hosted costs vs API →</Button>
+          </div>
+
           {result.mode === 'disagg' && (result.phases.prefill || result.phases.decode || result.phases.encode) && (
             <div className={styles.phaseSection}>
               <div className={styles.phaseHeading}>
@@ -852,6 +858,20 @@ export default function AdvancedEstimate() {
           )}
         </>
       )}
+
+      <CostAnalysisModal
+        result={result}
+        isOpen={costAnalysisOpen && result !== null}
+        onClose={() => setCostAnalysisOpen(false)}
+        gpusPerNode={result ? catalogGpus.find(g => g.systemId === result.metadata.system)?.gpusPerNode ?? null : null}
+        costingsEnabled={costingsEnabled}
+        models={costings.models}
+        source={pricingSource}
+        stale={costings.modelsStale}
+        updatedAt={costings.modelsUpdatedAt}
+        loading={costings.isLoading}
+        error={costings.error}
+      />
 
       {/* ─── Debug panel ─── */}
       <DebugPanel
