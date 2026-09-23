@@ -19,30 +19,83 @@ def setup_store():
 
 @pytest.fixture
 def seed_data():
-    store.set_models([
-        {"id": "anthropic/claude-sonnet-5", "name": "Claude Sonnet 5", "provider": "Anthropic",
-         "tier": "balanced", "price_per_m_input": 3.0, "price_per_m_output": 15.0, "context_window": 200000},
-        {"id": "openai/gpt-5.6-terra", "name": "GPT-5.6 Terra", "provider": "OpenAI",
-         "tier": "balanced", "price_per_m_input": 2.5, "price_per_m_output": 10.0, "context_window": 128000},
-    ])
+    store.set_models(
+        [
+            {
+                "id": "anthropic/claude-sonnet-5",
+                "name": "Claude Sonnet 5",
+                "provider": "Anthropic",
+                "tier": "balanced",
+                "price_per_m_input": 3.0,
+                "price_per_m_output": 15.0,
+                "context_window": 200000,
+            },
+            {
+                "id": "openai/gpt-5.6-terra",
+                "name": "GPT-5.6 Terra",
+                "provider": "OpenAI",
+                "tier": "balanced",
+                "price_per_m_input": 2.5,
+                "price_per_m_output": 10.0,
+                "context_window": 128000,
+            },
+        ]
+    )
     store._mark_scrape("models.openrouter")
     store._mark_scrape("models.litellm")
-    store.set_cloud_rates("h200_sxm", {
-        "cloud_rates": {
-            "aws.us-east-1": {"on_demand": 4.50, "spot_median": 1.80},
-            "gcp.us-central1": {"on_demand": 3.85, "spot_median": None},
+    store.set_cloud_rates(
+        "h200_sxm",
+        {
+            "cloud_rates": {
+                "aws.us-east-1": {"on_demand": 4.50, "spot_median": 1.80},
+                "gcp.us-central1": {"on_demand": 3.85, "spot_median": None},
+            },
+            "rates_updated_at": "2026-08-11T06:00:00Z",
+            "rates_stale": False,
         },
-        "rates_updated_at": "2026-08-11T06:00:00Z",
-        "rates_stale": False,
-    })
-    store.set_hardware_cost("h200_sxm", {
-        "new_usd": 42000, "used_usd": 28000,
-        "tdp_watts": 700, "gpus_per_node": 8,
-        "hardware_updated_at": "2026-08-01T00:00:00Z",
-    })
+    )
+    store.set_hardware_cost(
+        "h200_sxm",
+        {
+            "new_usd": 42000,
+            "used_usd": 28000,
+            "tdp_watts": 700,
+            "gpus_per_node": 8,
+            "hardware_updated_at": "2026-08-01T00:00:00Z",
+        },
+    )
 
 
 class TestGetModels:
+    @pytest.mark.asyncio
+    async def test_cached_input_price_round_trips_and_old_records_still_work(self):
+        store.set_models(
+            [
+                {"id": "a/priced", "price_per_m_input": 2.0, "price_per_m_cached_input": 0.0},
+                {"id": "b/unavailable", "price_per_m_input": 3.0, "price_per_m_cached_input": None},
+                {"id": "c/old", "price_per_m_input": 4.0},
+            ]
+        )
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.get("/models")
+
+        assert resp.status_code == 200
+        models = {m["id"]: m for m in resp.json()["models"]}
+        assert models["a/priced"]["price_per_m_cached_input"] == 0.0
+        assert models["b/unavailable"]["price_per_m_cached_input"] is None
+        assert "price_per_m_cached_input" not in models["c/old"]
+
+    @pytest.mark.asyncio
+    async def test_cached_price_is_specific_to_selected_source(self):
+        store.set_models([{"id": "dup/model", "price_per_m_cached_input": 0.5}], source="litellm")
+        store.set_models([{"id": "dup/model", "price_per_m_cached_input": None}], source="openrouter")
+        store.set_models([{"id": "dup/model", "price_per_m_cached_input": None}], source="merged")
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            for source, expected in [("litellm", 0.5), ("openrouter", None), ("merged", None)]:
+                resp = await client.get(f"/models?source={source}")
+                assert resp.status_code == 200
+                assert resp.json()["models"][0]["price_per_m_cached_input"] == expected
+
     @pytest.mark.asyncio
     async def test_returns_models(self, seed_data):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -82,16 +135,36 @@ class TestGetModels:
 
     @pytest.mark.asyncio
     async def test_source_selects_feed(self):
-        store.set_models([
-            {"id": "anthropic/claude-x", "name": "Claude X", "provider": "Anthropic",
-             "tier": "balanced", "price_per_m_input": 3.0, "price_per_m_output": 15.0,
-             "context_window": 200000, "source": "openrouter"},
-        ], source="openrouter")
-        store.set_models([
-            {"id": "meta-llama/llama-9", "name": "llama-9", "provider": "Meta",
-             "tier": "balanced", "price_per_m_input": 0.2, "price_per_m_output": 0.3,
-             "context_window": 128000, "source": "litellm"},
-        ], source="litellm")
+        store.set_models(
+            [
+                {
+                    "id": "anthropic/claude-x",
+                    "name": "Claude X",
+                    "provider": "Anthropic",
+                    "tier": "balanced",
+                    "price_per_m_input": 3.0,
+                    "price_per_m_output": 15.0,
+                    "context_window": 200000,
+                    "source": "openrouter",
+                },
+            ],
+            source="openrouter",
+        )
+        store.set_models(
+            [
+                {
+                    "id": "meta-llama/llama-9",
+                    "name": "llama-9",
+                    "provider": "Meta",
+                    "tier": "balanced",
+                    "price_per_m_input": 0.2,
+                    "price_per_m_output": 0.3,
+                    "context_window": 128000,
+                    "source": "litellm",
+                },
+            ],
+            source="litellm",
+        )
         store._mark_scrape("models.openrouter")
         store._mark_scrape("models.litellm")
 
@@ -230,8 +303,11 @@ class TestCORS:
     @pytest.mark.asyncio
     async def test_cors_headers(self, seed_data):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            resp = await client.options("/models", headers={
-                "Origin": "https://configiq.dev",
-                "Access-Control-Request-Method": "GET",
-            })
+            resp = await client.options(
+                "/models",
+                headers={
+                    "Origin": "https://configiq.dev",
+                    "Access-Control-Request-Method": "GET",
+                },
+            )
         assert resp.headers.get("access-control-allow-origin") == "*"

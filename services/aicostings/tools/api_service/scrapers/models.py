@@ -20,6 +20,7 @@ the live feeds), and an override for an id neither feed has is a full add. The
 from __future__ import annotations
 
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,17 @@ def _infer_provider(model_id: str) -> str:
     return mapping.get(prefix, prefix.title())
 
 
+def _cached_input_price_per_m(value: Any) -> float | None:
+    """Convert optional USD/token cache-read pricing to USD/million tokens."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        price = float(value) * 1_000_000
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return round(price, 4) if math.isfinite(price) and price >= 0 else None
+
+
 def _parse_openrouter_model(m: dict[str, Any]) -> dict[str, Any] | None:
     pricing = m.get("pricing", {})
     prompt_price = pricing.get("prompt")
@@ -87,6 +99,7 @@ def _parse_openrouter_model(m: dict[str, Any]) -> dict[str, Any] | None:
         "provider": _infer_provider(model_id),
         "tier": _classify_tier(model_id, model_name),
         "price_per_m_input": round(price_per_m_input, 4),
+        "price_per_m_cached_input": _cached_input_price_per_m(pricing.get("input_cache_read")),
         "price_per_m_output": round(price_per_m_output, 4),
         "context_window": m.get("context_length"),
         "source": "openrouter",
@@ -152,6 +165,7 @@ def _parse_litellm_model(m: dict[str, Any]) -> dict[str, Any] | None:
         "provider": provider,
         "tier": _classify_tier(model_id, model_id),
         "price_per_m_input": round(price_per_m_input, 4),
+        "price_per_m_cached_input": _cached_input_price_per_m(m.get("cache_read_input_token_cost")),
         "price_per_m_output": round(price_per_m_output, 4),
         "context_window": m.get("max_input_tokens"),
         "source": "litellm",
@@ -243,6 +257,10 @@ async def scrape_all_models(session: aiohttp.ClientSession) -> ModelScrapeResult
             continue
         base = merged_by_id.get(oid)
         patched = {**base, **o} if base else dict(o)
+        # A new ordinary input rate cannot reuse a cache-read rate from the
+        # scraped record unless the override explicitly prices cache reads too.
+        if "price_per_m_input" in o and "price_per_m_cached_input" not in o:
+            patched["price_per_m_cached_input"] = None
         patched["source"] = "override"
         merged_by_id[oid] = patched
 
@@ -250,6 +268,9 @@ async def scrape_all_models(session: aiohttp.ClientSession) -> ModelScrapeResult
 
     logger.info(
         "Models merged: %d total (OpenRouter: %d, LiteLLM: %d, overrides: %d)",
-        len(merged), len(or_models), len(lt_models), len(overrides),
+        len(merged),
+        len(or_models),
+        len(lt_models),
+        len(overrides),
     )
     return {"openrouter": or_models, "litellm": lt_models, "merged": merged}, errors

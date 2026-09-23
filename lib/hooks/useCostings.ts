@@ -11,6 +11,8 @@ export interface FrontierModel {
   provider: string
   tier: 'fast' | 'balanced' | 'frontier'
   price_per_m_input: number
+  /** USD per million cached input tokens; missing on older cached catalogs. */
+  price_per_m_cached_input?: number | null
   price_per_m_output: number
   context_window: number | null
   updated_at: string | null

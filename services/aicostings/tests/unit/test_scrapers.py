@@ -23,6 +23,7 @@ from tools.api_service.scrapers.hardware_costs import load_hardware_costs
 from tools.api_service.scrapers.models import (
     _classify_tier,
     _infer_provider,
+    _parse_litellm_model,
     _parse_openrouter_model,
     fetch_litellm_models,
     fetch_openrouter_models,
@@ -80,6 +81,49 @@ class TestParseOpenRouterModel:
         assert result["price_per_m_input"] == 3.0
         assert result["price_per_m_output"] == 15.0
         assert result["context_window"] == 200000
+        assert result["price_per_m_cached_input"] is None
+
+    @pytest.mark.parametrize(
+        "cache_read, expected",
+        [
+            ("0.00000125", 1.25),
+            (0, 0.0),
+            ("0", 0.0),
+            (None, None),
+            ("n/a", None),
+            (-0.000001, None),
+            ("nan", None),
+            ("inf", None),
+            ("-inf", None),
+            ("1e309", None),
+            (1e308, None),
+            (True, None),
+        ],
+    )
+    def test_cached_input_price(self, cache_read, expected):
+        m = {
+            "id": "a/model",
+            "name": "Model",
+            "pricing": {
+                "prompt": "0.000003",
+                "completion": "0.000015",
+                "input_cache_read": cache_read,
+            },
+        }
+        result = _parse_openrouter_model(m)
+        assert result is not None
+        assert result["price_per_m_cached_input"] == expected
+        assert result["price_per_m_input"] == 3.0
+
+    def test_missing_cached_price(self):
+        result = _parse_openrouter_model(
+            {
+                "id": "a/model",
+                "pricing": {"prompt": "0.000003", "completion": "0.000015"},
+            }
+        )
+        assert result is not None
+        assert result["price_per_m_cached_input"] is None
 
     def test_free_model_excluded(self):
         m = {
@@ -96,6 +140,46 @@ class TestParseOpenRouterModel:
     def test_no_pricing_key(self):
         m = {"id": "some/model", "name": "Model"}
         assert _parse_openrouter_model(m) is None
+
+
+class TestParseLiteLLMModel:
+    @pytest.mark.parametrize(
+        "cache_read, expected",
+        [
+            ("0.0000005", 0.5),
+            (0, 0.0),
+            ("0", 0.0),
+            (None, None),
+            ("invalid", None),
+            (-1, None),
+            (float("nan"), None),
+            (float("inf"), None),
+            ("1e309", None),
+        ],
+    )
+    def test_cached_input_price(self, cache_read, expected):
+        result = _parse_litellm_model(
+            {
+                "id": "a/model",
+                "input_cost_per_token": 0.000003,
+                "output_cost_per_token": 0.000015,
+                "cache_read_input_token_cost": cache_read,
+            }
+        )
+        assert result is not None
+        assert result["price_per_m_cached_input"] == expected
+        assert result["price_per_m_input"] == 3.0
+
+    def test_missing_cached_price(self):
+        result = _parse_litellm_model(
+            {
+                "id": "a/model",
+                "input_cost_per_token": 0.000003,
+                "output_cost_per_token": 0.000015,
+            }
+        )
+        assert result is not None
+        assert result["price_per_m_cached_input"] is None
 
 
 class TestFetchOpenRouterModels:
@@ -122,6 +206,7 @@ class TestFetchOpenRouterModels:
             assert "price_per_m_input" in m
             assert "price_per_m_output" in m
             assert m["price_per_m_input"] > 0
+        assert any(m["price_per_m_cached_input"] is not None for m in models)
 
     @pytest.mark.asyncio
     async def test_raises_on_api_error(self):
@@ -162,17 +247,105 @@ class TestFetchLiteLLMModels:
 
 class TestScrapeAllModels:
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "override, expected",
+        [
+            ({"price_per_m_input": 0.5}, None),
+            ({"price_per_m_input": 0.5, "price_per_m_cached_input": 0}, 0),
+            ({"price_per_m_input": 0.5, "price_per_m_cached_input": None}, None),
+            ({"price_per_m_cached_input": 0.2}, 0.2),
+            ({"price_per_m_output": 4.0}, 0.75),
+        ],
+    )
+    async def test_override_cached_price_follows_input_override(self, override, expected):
+        openrouter_models = [
+            {
+                "id": "a/model",
+                "name": "Model",
+                "price_per_m_input": 1.0,
+                "price_per_m_cached_input": 0.75,
+                "price_per_m_output": 2.0,
+                "source": "openrouter",
+            }
+        ]
+        with (
+            patch("tools.api_service.scrapers.models.fetch_openrouter_models", return_value=openrouter_models),
+            patch("tools.api_service.scrapers.models.fetch_litellm_models", return_value=[]),
+            patch(
+                "tools.api_service.scrapers.models.load_curated_overrides", return_value=[{"id": "a/model", **override}]
+            ),
+        ):
+            catalogs, _ = await scrape_all_models(AsyncMock())
+
+        patched = catalogs["merged"][0]
+        assert patched["price_per_m_cached_input"] == expected
+        assert patched["price_per_m_input"] == override.get("price_per_m_input", 1.0)
+        assert openrouter_models[0]["price_per_m_cached_input"] == 0.75
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("winning_cache_field", [{}, {"price_per_m_cached_input": None}])
+    async def test_winning_source_without_cached_price_does_not_inherit(self, winning_cache_field):
+        litellm_models = [
+            {
+                "id": "dup/model",
+                "price_per_m_input": 2.0,
+                "price_per_m_cached_input": 1.0,
+                "source": "litellm",
+            }
+        ]
+        # Includes the legacy form with no cached-input field at all.
+        openrouter_models = [
+            {
+                "id": "dup/model",
+                "price_per_m_input": 3.0,
+                "source": "openrouter",
+                **winning_cache_field,
+            }
+        ]
+        with (
+            patch("tools.api_service.scrapers.models.fetch_openrouter_models", return_value=openrouter_models),
+            patch("tools.api_service.scrapers.models.fetch_litellm_models", return_value=litellm_models),
+            patch("tools.api_service.scrapers.models.load_curated_overrides", return_value=[]),
+        ):
+            catalogs, _ = await scrape_all_models(AsyncMock())
+
+        assert catalogs["merged"] == openrouter_models
+        assert catalogs["merged"][0].get("price_per_m_cached_input") is None
+        assert catalogs["litellm"][0]["price_per_m_cached_input"] == 1.0
+
+    @pytest.mark.asyncio
     async def test_merges_overrides(self):
         openrouter_models = [
-            {"id": "a/model-1", "name": "M1", "provider": "A", "tier": "fast",
-             "price_per_m_input": 1.0, "price_per_m_output": 2.0, "context_window": 8000,
-             "source": "openrouter"},
+            {
+                "id": "a/model-1",
+                "name": "M1",
+                "provider": "A",
+                "tier": "fast",
+                "price_per_m_input": 1.0,
+                "price_per_m_output": 2.0,
+                "context_window": 8000,
+                "source": "openrouter",
+            },
         ]
         overrides = [
-            {"id": "a/model-1", "name": "M1 Override", "provider": "A", "tier": "fast",
-             "price_per_m_input": 0.5, "price_per_m_output": 1.0, "context_window": 16000},
-            {"id": "custom/model", "name": "Custom", "provider": "Custom", "tier": "balanced",
-             "price_per_m_input": 5.0, "price_per_m_output": 10.0, "context_window": 4000},
+            {
+                "id": "a/model-1",
+                "name": "M1 Override",
+                "provider": "A",
+                "tier": "fast",
+                "price_per_m_input": 0.5,
+                "price_per_m_output": 1.0,
+                "context_window": 16000,
+            },
+            {
+                "id": "custom/model",
+                "name": "Custom",
+                "provider": "Custom",
+                "tier": "balanced",
+                "price_per_m_input": 5.0,
+                "price_per_m_output": 10.0,
+                "context_window": 4000,
+            },
         ]
 
         with (
@@ -197,9 +370,16 @@ class TestScrapeAllModels:
         # and inherit the rest (name, tier, context_window) from the scraped
         # record — not replace the whole record.
         openrouter_models = [
-            {"id": "a/model-1", "name": "M1", "provider": "A", "tier": "fast",
-             "price_per_m_input": 1.0, "price_per_m_output": 2.0, "context_window": 8000,
-             "source": "openrouter"},
+            {
+                "id": "a/model-1",
+                "name": "M1",
+                "provider": "A",
+                "tier": "fast",
+                "price_per_m_input": 1.0,
+                "price_per_m_output": 2.0,
+                "context_window": 8000,
+                "source": "openrouter",
+            },
         ]
         overrides = [{"id": "a/model-1", "price_per_m_input": 0.5}]
 
@@ -208,13 +388,12 @@ class TestScrapeAllModels:
             patch("tools.api_service.scrapers.models.fetch_litellm_models", return_value=[]),
             patch("tools.api_service.scrapers.models.load_curated_overrides", return_value=overrides),
         ):
-            patched = next(m for m in (await scrape_all_models(AsyncMock()))[0]["merged"]
-                           if m["id"] == "a/model-1")
+            patched = next(m for m in (await scrape_all_models(AsyncMock()))[0]["merged"] if m["id"] == "a/model-1")
 
-        assert patched["price_per_m_input"] == 0.5   # overlaid
+        assert patched["price_per_m_input"] == 0.5  # overlaid
         assert patched["price_per_m_output"] == 2.0  # inherited from OpenRouter
-        assert patched["name"] == "M1"               # inherited
-        assert patched["context_window"] == 8000     # inherited
+        assert patched["name"] == "M1"  # inherited
+        assert patched["context_window"] == 8000  # inherited
         assert patched["source"] == "override"
 
     @pytest.mark.asyncio
@@ -222,17 +401,38 @@ class TestScrapeAllModels:
         # OpenRouter wins over LiteLLM on a duplicate id in the merged view, but
         # each per-source catalog keeps its own (tagged) records.
         openrouter_models = [
-            {"id": "dup/model", "name": "OR", "provider": "X", "tier": "balanced",
-             "price_per_m_input": 1.0, "price_per_m_output": 2.0, "context_window": 8000,
-             "source": "openrouter"},
+            {
+                "id": "dup/model",
+                "name": "OR",
+                "provider": "X",
+                "tier": "balanced",
+                "price_per_m_input": 1.0,
+                "price_per_m_output": 2.0,
+                "context_window": 8000,
+                "source": "openrouter",
+            },
         ]
         litellm_models = [
-            {"id": "dup/model", "name": "LT", "provider": "X", "tier": "balanced",
-             "price_per_m_input": 9.0, "price_per_m_output": 9.0, "context_window": 4000,
-             "source": "litellm"},
-            {"id": "lt/only", "name": "LT only", "provider": "X", "tier": "balanced",
-             "price_per_m_input": 0.1, "price_per_m_output": 0.2, "context_window": 2000,
-             "source": "litellm"},
+            {
+                "id": "dup/model",
+                "name": "LT",
+                "provider": "X",
+                "tier": "balanced",
+                "price_per_m_input": 9.0,
+                "price_per_m_output": 9.0,
+                "context_window": 4000,
+                "source": "litellm",
+            },
+            {
+                "id": "lt/only",
+                "name": "LT only",
+                "provider": "X",
+                "tier": "balanced",
+                "price_per_m_input": 0.1,
+                "price_per_m_output": 0.2,
+                "context_window": 2000,
+                "source": "litellm",
+            },
         ]
 
         with (
@@ -245,7 +445,7 @@ class TestScrapeAllModels:
         assert [m["id"] for m in catalogs["openrouter"]] == ["dup/model"]
         assert {m["id"] for m in catalogs["litellm"]} == {"dup/model", "lt/only"}
         dup = next(m for m in catalogs["merged"] if m["id"] == "dup/model")
-        assert dup["source"] == "openrouter"        # OpenRouter wins the collision
+        assert dup["source"] == "openrouter"  # OpenRouter wins the collision
         assert dup["price_per_m_input"] == 1.0
         assert {m["id"] for m in catalogs["merged"]} == {"dup/model", "lt/only"}
 
@@ -286,14 +486,24 @@ class TestScrapeAzure:
     async def test_skips_windows_products(self):
         # Azure returns Linux and Windows meters for the same SKU/region; the
         # Windows record must not overwrite the Linux on-demand price.
-        items = {"Items": [
-            {"armSkuName": "Standard_ND96asr_v4", "armRegionName": "eastus",
-             "retailPrice": 3.0, "meterName": "ND96asr v4",
-             "productName": "Virtual Machines NDasr A100 v4 Series"},
-            {"armSkuName": "Standard_ND96asr_v4", "armRegionName": "eastus",
-             "retailPrice": 5.0, "meterName": "ND96asr v4",
-             "productName": "Virtual Machines NDasr A100 v4 Series Windows"},
-        ]}
+        items = {
+            "Items": [
+                {
+                    "armSkuName": "Standard_ND96asr_v4",
+                    "armRegionName": "eastus",
+                    "retailPrice": 3.0,
+                    "meterName": "ND96asr v4",
+                    "productName": "Virtual Machines NDasr A100 v4 Series",
+                },
+                {
+                    "armSkuName": "Standard_ND96asr_v4",
+                    "armRegionName": "eastus",
+                    "retailPrice": 5.0,
+                    "meterName": "ND96asr v4",
+                    "productName": "Virtual Machines NDasr A100 v4 Series Windows",
+                },
+            ]
+        }
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=items)
@@ -332,10 +542,10 @@ class _AsyncByteReader:
 
     async def read(self, n: int = -1) -> bytes:
         if n is None or n < 0:
-            chunk = self._data[self._pos:]
+            chunk = self._data[self._pos :]
             self._pos = len(self._data)
         else:
-            chunk = self._data[self._pos:self._pos + n]
+            chunk = self._data[self._pos : self._pos + n]
             self._pos += len(chunk)
         return chunk
 
@@ -369,16 +579,22 @@ class TestAwsScrapeRegion:
     async def test_extracts_ondemand_price_from_composite_keys(self):
         session = self._session_for(self._fixture_bytes())
         records = await _aws_scrape_region(
-            session, "us-east-1", "http://x", {"p4d.24xlarge"}, {"p4d.24xlarge": "a100_sxm"},
+            session,
+            "us-east-1",
+            "http://x",
+            {"p4d.24xlarge"},
+            {"p4d.24xlarge": "a100_sxm"},
         )
         # Only the Shared+Linux+Used+NA SKU is priced; Windows and Dedicated are
         # filtered out at the product stage, so exactly one on-demand record.
-        assert records == [{
-            "system_id": "a100_sxm",
-            "provider_region": "aws.us-east-1",
-            "on_demand": 32.7726,
-            "spot_median": None,
-        }]
+        assert records == [
+            {
+                "system_id": "a100_sxm",
+                "provider_region": "aws.us-east-1",
+                "on_demand": 32.7726,
+                "spot_median": None,
+            }
+        ]
 
     @pytest.mark.asyncio
     async def test_scrape_aws_raises_when_no_records(self, monkeypatch):
@@ -391,17 +607,18 @@ class TestAwsScrapeRegion:
             return {"us-east-1": "http://x"}
 
         monkeypatch.setattr(
-            "tools.api_service.scrapers.cloud_rates._aws_region_file_urls", fake_urls,
+            "tools.api_service.scrapers.cloud_rates._aws_region_file_urls",
+            fake_urls,
         )
         monkeypatch.setattr(
-            "tools.api_service.scrapers.cloud_rates.AWS_PRICING_REGIONS", ["us-east-1"],
+            "tools.api_service.scrapers.cloud_rates.AWS_PRICING_REGIONS",
+            ["us-east-1"],
         )
         with pytest.raises(RuntimeError, match="no rate records"):
             await scrape_aws(session, {"p4d.24xlarge": "a100_sxm"})
 
 
-_KEY_VARS = ["RUNPOD_API_KEY", "LAMBDA_API_KEY", "GCP_BILLING_API_KEY",
-             "SCALEWAY_SECRET_KEY", "IBMCLOUD_API_KEY"]
+_KEY_VARS = ["RUNPOD_API_KEY", "LAMBDA_API_KEY", "GCP_BILLING_API_KEY", "SCALEWAY_SECRET_KEY", "IBMCLOUD_API_KEY"]
 
 
 class TestActiveScrapers:
@@ -423,11 +640,13 @@ class TestActiveScrapers:
 class TestScrapeVastai:
     @pytest.mark.asyncio
     async def test_medians_per_gpu(self):
-        offers = {"offers": [
-            {"gpu_name": "H100 SXM", "num_gpus": 8, "dph_total": 16.0},   # 2.0/GPU
-            {"gpu_name": "H100 SXM", "num_gpus": 4, "dph_total": 12.0},   # 3.0/GPU
-            {"gpu_name": "Totally Unknown GPU", "num_gpus": 1, "dph_total": 1.0},  # unmapped
-        ]}
+        offers = {
+            "offers": [
+                {"gpu_name": "H100 SXM", "num_gpus": 8, "dph_total": 16.0},  # 2.0/GPU
+                {"gpu_name": "H100 SXM", "num_gpus": 4, "dph_total": 12.0},  # 3.0/GPU
+                {"gpu_name": "Totally Unknown GPU", "num_gpus": 1, "dph_total": 1.0},  # unmapped
+            ]
+        }
         mock_response = MagicMock()
         mock_response.status = 200
         mock_response.json = AsyncMock(return_value=offers)
