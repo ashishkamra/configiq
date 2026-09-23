@@ -404,13 +404,22 @@ components:
           type: integer
           description: Concurrency level at which these metrics hold.
         request_rate:
-          type: number
-          description: Achievable request rate (req/s).
+          type: [number, 'null']
+          description: Achievable request rate per replica (req/s); prefers request_rate, falls back to seq/s. Null if unavailable or non-positive/non-finite.
 
         # Throughput
         tokens_per_second:
-          type: number
-          description: Total tokens/s.
+          type: [number, 'null']
+          description: Legacy per-replica output tokens/s (kept for compatibility).
+        input_tokens_per_second:
+          type: [number, 'null']
+          description: Per-replica input tokens/s (achievable request_rate times request ISL); null if unavailable or non-positive/non-finite.
+        output_tokens_per_second:
+          type: [number, 'null']
+          description: Per-replica output tokens/s from SDK tokens/s; null if unavailable or non-positive/non-finite.
+        total_tokens_per_second:
+          type: [number, 'null']
+          description: Per-replica input plus output tokens/s; null unless both are positive and finite.
         tokens_per_second_per_gpu:
           type: number
           description: Tokens/s per GPU.

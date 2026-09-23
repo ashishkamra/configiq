@@ -29,6 +29,7 @@ client = TestClient(app)
 def _sdk_available() -> bool:
     try:
         from aiconfigurator_core.sdk.common import SupportedSystems
+
         return len(SupportedSystems) > 0
     except Exception:
         return False
@@ -63,37 +64,95 @@ VALID_MEMORY_BODY = {
 }
 
 MOCK_COLUMNS_AGG = [
-    "model", "isl", "osl", "prefix", "concurrency", "request_rate",
-    "bs", "global_bs", "ttft", "tpot", "request_latency",
-    "encoder_latency", "encoder_memory",
-    "seq/s", "seq/s/gpu", "tokens/s", "tokens/s/gpu", "tokens/s/user",
-    "num_total_gpus", "tp", "pp", "dp", "moe_tp", "moe_ep", "cp",
-    "parallel", "gemm", "kvcache", "fmha", "moe", "comm",
-    "memory", "balance_score",
-    "num_ctx_reqs", "num_gen_reqs", "num_tokens", "ctx_tokens", "gen_tokens",
-    "backend", "version", "system", "power_w",
+    "model",
+    "isl",
+    "osl",
+    "prefix",
+    "concurrency",
+    "request_rate",
+    "bs",
+    "global_bs",
+    "ttft",
+    "tpot",
+    "request_latency",
+    "encoder_latency",
+    "encoder_memory",
+    "seq/s",
+    "seq/s/gpu",
+    "tokens/s",
+    "tokens/s/gpu",
+    "tokens/s/user",
+    "num_total_gpus",
+    "tp",
+    "pp",
+    "dp",
+    "moe_tp",
+    "moe_ep",
+    "cp",
+    "parallel",
+    "gemm",
+    "kvcache",
+    "fmha",
+    "moe",
+    "comm",
+    "memory",
+    "balance_score",
+    "num_ctx_reqs",
+    "num_gen_reqs",
+    "num_tokens",
+    "ctx_tokens",
+    "gen_tokens",
+    "backend",
+    "version",
+    "system",
+    "power_w",
 ]
 
 MOCK_ROW = {
     "model": "Qwen/Qwen3-32B",
-    "isl": np.int64(4000), "osl": np.int64(1000), "prefix": np.int64(0),
-    "concurrency": np.int64(48), "request_rate": 1.681,
-    "bs": np.int64(48), "global_bs": np.int64(48),
-    "ttft": 471.378, "tpot": 28.118, "request_latency": 28561.14,
-    "encoder_latency": np.int64(0), "encoder_memory": 0.0,
-    "seq/s": 1.681, "seq/s/gpu": 0.84,
-    "tokens/s": 1678.925, "tokens/s/gpu": 839.462, "tokens/s/user": 35.565,
+    "isl": np.int64(4000),
+    "osl": np.int64(1000),
+    "prefix": np.int64(0),
+    "concurrency": np.int64(48),
+    "request_rate": 1.681,
+    "bs": np.int64(48),
+    "global_bs": np.int64(48),
+    "ttft": 471.378,
+    "tpot": 28.118,
+    "request_latency": 28561.14,
+    "encoder_latency": np.int64(0),
+    "encoder_memory": 0.0,
+    "seq/s": 1.681,
+    "seq/s/gpu": 0.84,
+    "tokens/s": 1678.925,
+    "tokens/s/gpu": 839.462,
+    "tokens/s/user": 35.565,
     "num_total_gpus": np.int64(2),
-    "tp": np.int64(2), "pp": np.int64(1), "dp": np.int64(1),
-    "moe_tp": np.int64(1), "moe_ep": np.int64(1), "cp": np.int64(1),
+    "tp": np.int64(2),
+    "pp": np.int64(1),
+    "dp": np.int64(1),
+    "moe_tp": np.int64(1),
+    "moe_ep": np.int64(1),
+    "cp": np.int64(1),
     "parallel": "tp2pp1dp1etp1ep1",
-    "gemm": "bfloat16", "kvcache": "bfloat16", "fmha": "bfloat16",
-    "moe": "bfloat16", "comm": "half",
-    "memory": 64.044, "balance_score": 0.048,
-    "num_ctx_reqs": 1.0, "num_gen_reqs": 47.0,
-    "num_tokens": 4047.0, "ctx_tokens": np.int64(4000), "gen_tokens": 47.0,
-    "backend": "vllm", "version": "0.24.0", "system": "h200_sxm", "power_w": 0.0,
-    "total_gpus_needed": np.int64(2), "replicas_needed": np.int64(1),
+    "gemm": "bfloat16",
+    "kvcache": "bfloat16",
+    "fmha": "bfloat16",
+    "moe": "bfloat16",
+    "comm": "half",
+    "memory": 64.044,
+    "balance_score": 0.048,
+    "num_ctx_reqs": 1.0,
+    "num_gen_reqs": 47.0,
+    "num_tokens": 4047.0,
+    "ctx_tokens": np.int64(4000),
+    "gen_tokens": 47.0,
+    "backend": "vllm",
+    "version": "0.24.0",
+    "system": "h200_sxm",
+    "power_w": 0.0,
+    "total_gpus_needed": np.int64(2),
+    "replicas_needed": np.int64(1),
 }
 
 MOCK_KV_CACHE_RESULT = {
@@ -151,7 +210,6 @@ def make_mock_cli_result(rows=None):
 
 
 class TestRecommend:
-
     @patch("tools.api_service.app.cli_recommend")
     def test_success(self, mock_recommend):
         mock_recommend.return_value = make_mock_cli_result()
@@ -177,6 +235,10 @@ class TestRecommend:
         assert cfg["ttft"] == 471.378
         assert cfg["tpot"] == 28.118
         assert cfg["tokens_per_second"] == 1678.925
+        assert cfg["request_rate"] == pytest.approx(1.681)
+        assert cfg["input_tokens_per_second"] == pytest.approx(1.681 * VALID_RECOMMEND_BODY["isl"])
+        assert cfg["output_tokens_per_second"] == pytest.approx(1678.925)
+        assert cfg["total_tokens_per_second"] == pytest.approx(1.681 * 4000 + 1678.925)
         assert cfg["tokens_per_second_per_gpu"] == 839.462
         assert cfg["memory"] == 64.044
         assert cfg["model"] == "Qwen/Qwen3-32B"
@@ -184,6 +246,63 @@ class TestRecommend:
         assert cfg["backend"] == "vllm"
         assert cfg["backend_version"] == "0.24.0"
         assert cfg["gemm"] == "bfloat16"
+
+    @patch("tools.api_service.app.cli_recommend")
+    def test_rate_falls_back_to_seq_per_second_and_uses_request_isl(self, mock_recommend):
+        row = {**MOCK_ROW, "request_rate": np.nan, "seq/s": 2.5, "isl": 999}
+        mock_recommend.return_value = make_mock_cli_result([row])
+        resp = client.post("/recommend", json={**VALID_RECOMMEND_BODY, "isl": 128})
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        assert cfg["request_rate"] == pytest.approx(2.5)
+        assert cfg["input_tokens_per_second"] == pytest.approx(320)
+        assert cfg["output_tokens_per_second"] == pytest.approx(1678.925)
+        assert cfg["total_tokens_per_second"] == pytest.approx(1998.925)
+
+    @patch("tools.api_service.app.cli_recommend")
+    def test_achievable_request_rate_takes_precedence_over_seq_per_second(self, mock_recommend):
+        mock_recommend.return_value = make_mock_cli_result([{**MOCK_ROW, "request_rate": 3.0, "seq/s": 99.0}])
+        resp = client.post("/recommend", json=VALID_RECOMMEND_BODY)
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        assert cfg["request_rate"] == 3.0
+        assert cfg["input_tokens_per_second"] == 3.0 * VALID_RECOMMEND_BODY["isl"]
+
+    @pytest.mark.parametrize("bad_rate", [None, 0, -1, np.nan, float("inf")])
+    @patch("tools.api_service.app.cli_recommend")
+    def test_unavailable_rate_does_not_invent_input_or_total(self, mock_recommend, bad_rate):
+        row = {**MOCK_ROW, "request_rate": bad_rate, "seq/s": np.nan}
+        mock_recommend.return_value = make_mock_cli_result([row])
+        resp = client.post("/recommend", json=VALID_RECOMMEND_BODY)
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        assert cfg["request_rate"] is None
+        assert cfg["input_tokens_per_second"] is None
+        assert cfg["output_tokens_per_second"] == pytest.approx(1678.925)
+        assert cfg["total_tokens_per_second"] is None
+
+    @pytest.mark.parametrize("bad_output", [None, 0, -1, np.nan, float("inf")])
+    @patch("tools.api_service.app.cli_recommend")
+    def test_unavailable_output_does_not_invent_total(self, mock_recommend, bad_output):
+        mock_recommend.return_value = make_mock_cli_result([{**MOCK_ROW, "tokens/s": bad_output}])
+        resp = client.post("/recommend", json=VALID_RECOMMEND_BODY)
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        assert cfg["input_tokens_per_second"] == pytest.approx(6724)
+        assert cfg["output_tokens_per_second"] is None
+        assert cfg["total_tokens_per_second"] is None
+        assert cfg["tokens_per_second"] == (bad_output if bad_output in (0, -1) else None)
+
+    @patch("tools.api_service.app.cli_recommend")
+    def test_missing_metrics_are_null_not_zero(self, mock_recommend):
+        mock_recommend.return_value = make_mock_cli_result([{"model": "Qwen/Qwen3-32B"}])
+        resp = client.post("/recommend", json=VALID_RECOMMEND_BODY)
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        assert cfg["request_rate"] is None
+        assert cfg["input_tokens_per_second"] is None
+        assert cfg["output_tokens_per_second"] is None
+        assert cfg["total_tokens_per_second"] is None
 
     @patch("tools.api_service.app.cli_recommend")
     def test_inclusive_tpot(self, mock_recommend):
@@ -383,7 +502,6 @@ class TestRecommend:
 
 
 class TestMemory:
-
     @patch("tools.api_service.app.estimate_kv_cache")
     def test_success(self, mock_kv):
         mock_kv.return_value = MOCK_KV_CACHE_RESULT
@@ -470,7 +588,6 @@ MOCK_MODEL_CFG_DENSE = {
 
 
 class TestModels:
-
     @patch("tools.api_service.app.get_default_models")
     def test_returns_sorted_list(self, mock_models):
         mock_models.return_value = {"Zeta/Z-1B", "Alpha/A-7B", "Meta/M-70B"}
@@ -537,8 +654,10 @@ class TestModels:
 
 
 class TestSystems:
-
-    @patch.dict("tools.api_service.app._DEVICE_DISPLAY_NAMES", {"h200_sxm": "NVIDIA H200 SXM", "a100_sxm": "NVIDIA A100-SXM4-80GB"})
+    @patch.dict(
+        "tools.api_service.app._DEVICE_DISPLAY_NAMES",
+        {"h200_sxm": "NVIDIA H200 SXM", "a100_sxm": "NVIDIA A100-SXM4-80GB"},
+    )
     @patch("tools.api_service.app.supported_systems", lambda: {"h200_sxm", "a100_sxm"})
     def test_returns_sorted_objects(self):
         resp = client.get("/systems")
@@ -637,9 +756,9 @@ class TestSystems:
 # these requests (all integration tests return 200), so this predicate is only
 # ever reached in an environment that genuinely lacks perf data.
 _NO_PERF_DATA_MARKERS = (
-    "no performance data available",   # _common_error_handler perf-data path
-    "no configuration meets",          # /recommend fallback (no config found)
-    "no feasible",                     # NoFeasibleConfigError
+    "no performance data available",  # _common_error_handler perf-data path
+    "no configuration meets",  # /recommend fallback (no config found)
+    "no feasible",  # NoFeasibleConfigError
 )
 
 
@@ -670,7 +789,6 @@ def _skip_if_missing_perf_data(resp) -> None:
     reason="aisimulate SDK not installed or missing perf data",
 )
 class TestIntegration:
-
     @classmethod
     def setup_class(cls):
         device_names = load_device_names_from_perf_data()
@@ -681,12 +799,15 @@ class TestIntegration:
         app_module._DEVICE_DISPLAY_NAMES = device_names
 
     def test_recommend_real(self):
-        resp = client.post("/recommend", json={
-            "model_path": "Qwen/Qwen3-32B",
-            "system": "h200_sxm",
-            "target_concurrency": 32,
-            "top_n": 1,
-        })
+        resp = client.post(
+            "/recommend",
+            json={
+                "model_path": "Qwen/Qwen3-32B",
+                "system": "h200_sxm",
+                "target_concurrency": 32,
+                "top_n": 1,
+            },
+        )
         _skip_if_missing_perf_data(resp)
         assert resp.status_code == 200
         data = resp.json()
@@ -698,12 +819,15 @@ class TestIntegration:
         assert cfg["tokens_per_second"] > 0
 
     def test_recommend_with_include(self):
-        resp = client.post("/recommend?include=config,memory", json={
-            "model_path": "Qwen/Qwen3-32B",
-            "system": "h200_sxm",
-            "target_concurrency": 32,
-            "top_n": 1,
-        })
+        resp = client.post(
+            "/recommend?include=config,memory",
+            json={
+                "model_path": "Qwen/Qwen3-32B",
+                "system": "h200_sxm",
+                "target_concurrency": 32,
+                "top_n": 1,
+            },
+        )
         _skip_if_missing_perf_data(resp)
         assert resp.status_code == 200
         cfg = resp.json()["configs"][0]
@@ -711,13 +835,16 @@ class TestIntegration:
         assert cfg["serving_config"]["tensor_parallel_size"] >= 1
 
     def test_memory_real(self):
-        resp = client.post("/memory", json={
-            "model_path": "Qwen/Qwen3-32B",
-            "system": "h200_sxm",
-            "backend": "vllm",
-            "backend_version": "0.24.0",
-            "tp_size": 2,
-        })
+        resp = client.post(
+            "/memory",
+            json={
+                "model_path": "Qwen/Qwen3-32B",
+                "system": "h200_sxm",
+                "backend": "vllm",
+                "backend_version": "0.24.0",
+                "tp_size": 2,
+            },
+        )
         _skip_if_missing_perf_data(resp)
         assert resp.status_code == 200
         data = resp.json()
@@ -768,13 +895,16 @@ class TestIntegration:
             assert s["name"] != s["id"], f"{s['id']} surfaced without a display name"
 
     def test_estimate_real(self):
-        resp = client.post("/estimate", json={
-            "model_path": "Qwen/Qwen3-32B",
-            "system": "h200_sxm",
-            "backend": "vllm",
-            "tp_size": 2,
-            "batch_size": 48,
-        })
+        resp = client.post(
+            "/estimate",
+            json={
+                "model_path": "Qwen/Qwen3-32B",
+                "system": "h200_sxm",
+                "backend": "vllm",
+                "tp_size": 2,
+                "batch_size": 48,
+            },
+        )
         _skip_if_missing_perf_data(resp)
         assert resp.status_code == 200
         data = resp.json()
@@ -783,14 +913,17 @@ class TestIntegration:
         assert data["tokens_per_second"] > 0
 
     def test_estimate_with_include_real(self):
-        resp = client.post("/estimate?include=config,memory", json={
-            "model_path": "Qwen/Qwen3-32B",
-            "system": "h200_sxm",
-            "backend": "vllm",
-            "backend_version": "0.24.0",
-            "tp_size": 2,
-            "batch_size": 48,
-        })
+        resp = client.post(
+            "/estimate?include=config,memory",
+            json={
+                "model_path": "Qwen/Qwen3-32B",
+                "system": "h200_sxm",
+                "backend": "vllm",
+                "backend_version": "0.24.0",
+                "tp_size": 2,
+                "batch_size": 48,
+            },
+        )
         _skip_if_missing_perf_data(resp)
         assert resp.status_code == 200
         cfg = resp.json()
@@ -802,28 +935,50 @@ class TestIntegration:
 
 
 class TestRecommendDisagg:
-
     @patch("tools.api_service.app.cli_recommend")
     def test_disagg_result_has_prefill_decode_configs(self, mock_recommend):
         disagg_row = {
-            "model": "Qwen/Qwen3-32B", "isl": 1000, "osl": 150,
-            "concurrency": 36, "ttft": 180.157, "tpot": 24.675,
-            "tokens/s": 1348.785, "tokens/s/gpu": 674.392,
-            "num_total_gpus": 2, "total_gpus_needed": 6, "replicas_needed": 3,
-            "request_rate": 8.992, "request_latency": 3856.732,
-            "encoder_latency": 0.0, "encoder_memory": 0.0,
-            "seq/s": 8.992, "seq/s/gpu": 4.496,
-            "tokens/s/user": 40.527, "power_w": 0.0,
-            "(p)tp": np.int64(1), "(p)pp": np.int64(1), "(p)dp": np.int64(1),
-            "(p)cp": np.int64(1), "(p)bs": np.int64(1),
-            "(p)workers": np.int64(1), "(p)memory": 64.9,
-            "(p)gemm": "bfloat16", "(p)kvcache": "bfloat16",
-            "(p)fmha": "bfloat16", "(p)moe": "bfloat16", "(p)comm": "half",
+            "model": "Qwen/Qwen3-32B",
+            "isl": 1000,
+            "osl": 150,
+            "concurrency": 36,
+            "ttft": 180.157,
+            "tpot": 24.675,
+            "tokens/s": 1348.785,
+            "tokens/s/gpu": 674.392,
+            "num_total_gpus": 2,
+            "total_gpus_needed": 6,
+            "replicas_needed": 3,
+            "request_rate": 8.992,
+            "request_latency": 3856.732,
+            "encoder_latency": 0.0,
+            "encoder_memory": 0.0,
+            "seq/s": 8.992,
+            "seq/s/gpu": 4.496,
+            "tokens/s/user": 40.527,
+            "power_w": 0.0,
+            "(p)tp": np.int64(1),
+            "(p)pp": np.int64(1),
+            "(p)dp": np.int64(1),
+            "(p)cp": np.int64(1),
+            "(p)bs": np.int64(1),
+            "(p)workers": np.int64(1),
+            "(p)memory": 64.9,
+            "(p)gemm": "bfloat16",
+            "(p)kvcache": "bfloat16",
+            "(p)fmha": "bfloat16",
+            "(p)moe": "bfloat16",
+            "(p)comm": "half",
             "(p)version": "0.24.0",
-            "(d)tp": np.int64(4), "(d)pp": np.int64(1), "(d)dp": np.int64(1),
-            "(d)cp": np.int64(1), "(d)bs": np.int64(36),
-            "(d)workers": np.int64(1), "(d)memory": 70.1,
-            "(d)gemm": "bfloat16", "(d)version": "0.24.0",
+            "(d)tp": np.int64(4),
+            "(d)pp": np.int64(1),
+            "(d)dp": np.int64(1),
+            "(d)cp": np.int64(1),
+            "(d)bs": np.int64(36),
+            "(d)workers": np.int64(1),
+            "(d)memory": 70.1,
+            "(d)gemm": "bfloat16",
+            "(d)version": "0.24.0",
         }
         result = make_mock_cli_result([disagg_row])
         result.chosen_exp = "disagg_vllm"
@@ -845,6 +1000,11 @@ class TestRecommendDisagg:
         assert cfg["decode_config"]["batch_size"] == 36
         assert cfg["prefill_config"]["cp"] == 1
         assert cfg["total_gpus_needed"] == 6
+        # All rates are per replica, even when multiple disagg pools/replicas exist.
+        assert cfg["request_rate"] == pytest.approx(8.992)
+        assert cfg["input_tokens_per_second"] == pytest.approx(8.992 * VALID_RECOMMEND_BODY["isl"])
+        assert cfg["output_tokens_per_second"] == pytest.approx(1348.785)
+        assert cfg["total_tokens_per_second"] == pytest.approx(8.992 * 4000 + 1348.785)
         # Per-GPU peak memory is the worst-case across pools, NOT the sum
         # (each (x)memory is checked against a single GPU's capacity).
         assert cfg["memory"] == pytest.approx(70.1)
@@ -863,15 +1023,27 @@ class TestRecommendDisagg:
 # ─── /estimate tests ──────────────────────────────────────────────────────────
 
 MOCK_ESTIMATE_RESULT_RAW = {
-    "model": "Qwen/Qwen3-32B", "isl": 4000, "osl": 1000,
-    "ttft": 471.378, "tpot": 28.118, "request_latency": 28561.14,
-    "bs": np.int64(128), "global_bs": np.int64(128),
-    "tokens/s": 1678.925, "tokens/s/gpu": 839.462, "tokens/s/user": 35.565,
+    "model": "Qwen/Qwen3-32B",
+    "isl": 4000,
+    "osl": 1000,
+    "ttft": 471.378,
+    "tpot": 28.118,
+    "request_latency": 28561.14,
+    "bs": np.int64(128),
+    "global_bs": np.int64(128),
+    "tokens/s": 1678.925,
+    "tokens/s/gpu": 839.462,
+    "tokens/s/user": 35.565,
     "num_total_gpus": np.int64(2),
-    "tp": np.int64(2), "pp": np.int64(1), "dp": np.int64(1),
+    "tp": np.int64(2),
+    "pp": np.int64(1),
+    "dp": np.int64(1),
     "memory": 64.044,
-    "backend": "vllm", "version": "0.24.0", "system": "h200_sxm",
-    "gemm": "bfloat16", "kvcache": "bfloat16",
+    "backend": "vllm",
+    "version": "0.24.0",
+    "system": "h200_sxm",
+    "gemm": "bfloat16",
+    "kvcache": "bfloat16",
     "power_w": 0.0,
 }
 
@@ -896,7 +1068,6 @@ def make_mock_estimate_result():
 
 
 class TestEstimate:
-
     @patch("tools.api_service.app.cli_estimate")
     def test_success(self, mock_estimate):
         mock_estimate.return_value = make_mock_estimate_result()
@@ -957,20 +1128,33 @@ class TestEstimate:
         mock.tpot = 30.0
         mock.power_w = 0.0
         mock.raw = {
-            "ttft": 500.0, "tpot": 30.0, "request_latency": 30000.0,
-            "tokens/s": 1000.0, "tokens/s/gpu": 250.0, "tokens/s/user": 40.0,
-            "bs": np.int64(64), "system": "h200_sxm", "backend": "vllm",
-            "version": "0.24.0", "gemm": "bfloat16", "kvcache": "bfloat16",
-            "(p)memory": 60.0, "(d)memory": 72.5,
+            "ttft": 500.0,
+            "tpot": 30.0,
+            "request_latency": 30000.0,
+            "tokens/s": 1000.0,
+            "tokens/s/gpu": 250.0,
+            "tokens/s/user": 40.0,
+            "bs": np.int64(64),
+            "system": "h200_sxm",
+            "backend": "vllm",
+            "version": "0.24.0",
+            "gemm": "bfloat16",
+            "kvcache": "bfloat16",
+            "(p)memory": 60.0,
+            "(d)memory": 72.5,
         }
         mock_estimate.return_value = mock
         body = {
             **VALID_ESTIMATE_BODY,
             "mode": "disagg",
-            "prefill_tp_size": 1, "prefill_pp_size": 1,
-            "prefill_num_workers": 4, "prefill_batch_size": 1,
-            "decode_tp_size": 4, "decode_pp_size": 1,
-            "decode_num_workers": 1, "decode_batch_size": 64,
+            "prefill_tp_size": 1,
+            "prefill_pp_size": 1,
+            "prefill_num_workers": 4,
+            "prefill_batch_size": 1,
+            "decode_tp_size": 4,
+            "decode_pp_size": 1,
+            "decode_num_workers": 1,
+            "decode_batch_size": 64,
         }
         resp = client.post("/estimate", json=body)
         assert resp.status_code == 200
@@ -1048,8 +1232,8 @@ class TestEstimate:
 
 # ─── model_config passthrough tests ──────────────────────────────────────────
 
-class TestModelConfigPassthrough:
 
+class TestModelConfigPassthrough:
     @patch("tools.api_service.app.cli_recommend")
     def test_recommend_accepts_model_config(self, mock_recommend):
         mock_recommend.return_value = make_mock_cli_result()

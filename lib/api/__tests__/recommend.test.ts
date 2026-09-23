@@ -28,7 +28,11 @@ const EXTERNAL_RESPONSE = {
     concurrency: 128,
     tpot: 149.95,
     request_latency: 19643.78,
+    request_rate: 2,
     tokens_per_second: 846.93,
+    input_tokens_per_second: 4096,
+    output_tokens_per_second: 846.93,
+    total_tokens_per_second: 4942.93,
     tokens_per_second_per_gpu: 211.73,
     tokens_per_second_per_user: 6.67,
     memory: 58.61,
@@ -154,6 +158,10 @@ describe('callRecommend', () => {
     expect(r.throughput.tokensPerSecond).toBe(846.93)
     expect(r.throughput.tokensPerSecondPerGpu).toBe(211.73)
     expect(r.throughput.tokensPerSecondPerUser).toBe(6.67)
+    expect(r.throughput.requestsPerSecond).toBe(2)
+    expect(r.throughput.inputTokensPerSecond).toBe(4096)
+    expect(r.throughput.outputTokensPerSecond).toBe(846.93)
+    expect(r.throughput.totalTokensPerSecond).toBe(4942.93)
     expect(r.memory).toEqual({ value: 58.61, unit: 'GB' })
     expect(r.metadata.modelPath).toBe('meta-llama/Llama-3.1-70B-Instruct')
     expect(r.metadata.system).toBe('h200_sxm')
@@ -311,6 +319,137 @@ describe('callRecommend', () => {
 
     expect(result.metadata.durationMs).toBeTypeOf('number')
     expect(result.metadata.durationMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it.each(['agg', 'disagg_vllm'])('scales %s per-replica rates to the cluster', async (chosen_mode) => {
+    vi.stubGlobal('fetch', mockFetchOk({
+      chosen_mode,
+      configs: [{
+        ...EXTERNAL_RESPONSE.configs[0],
+        replicas_needed: 3,
+        total_gpus_needed: 12,
+        ...(chosen_mode.startsWith('disagg') ? {
+          prefill_config: { tp: 1, num_workers: 1 },
+          decode_config: { tp: 3, num_workers: 1 },
+        } : {}),
+      }],
+    }))
+
+    const result = await callRecommend(VALID_REQUEST) as RecommendResult
+    expect(result.mode).toBe(chosen_mode.startsWith('disagg') ? 'disagg' : 'agg')
+    expect(result.recommendation.replicasNeeded).toBe(3)
+    expect(result.performance.concurrency).toBe(384)
+    expect(result.throughput).toMatchObject({
+      tokensPerSecond: 846.93 * 3,
+      tokensPerSecondPerGpu: 211.73,
+      tokensPerSecondPerUser: 6.67,
+      requestsPerSecond: 6,
+      inputTokensPerSecond: 4096 * 3,
+      outputTokensPerSecond: 846.93 * 3,
+      totalTokensPerSecond: 4942.93 * 3,
+    })
+    expect(result.metadata.inputTokens).toBe(2048)
+    expect(result.metadata.outputTokens).toBe(128)
+  })
+
+  it('derives missing new fields from an older gateway using achievable rate and request ISL', async () => {
+    vi.stubGlobal('fetch', mockFetchOk({
+      chosen_mode: 'agg',
+      configs: [{
+        ...EXTERNAL_RESPONSE.configs[0],
+        replicas_needed: 2,
+        request_rate: 1.5,
+        input_tokens_per_second: undefined,
+        output_tokens_per_second: undefined,
+        total_tokens_per_second: undefined,
+      }],
+    }))
+
+    const result = await callRecommend(VALID_REQUEST) as RecommendResult
+    expect(result.throughput.requestsPerSecond).toBe(3)
+    expect(result.throughput.inputTokensPerSecond).toBe(1.5 * 2048 * 2)
+    expect(result.throughput.outputTokensPerSecond).toBe(846.93 * 2)
+    expect(result.throughput.totalTokensPerSecond).toBe((1.5 * 2048 + 846.93) * 2)
+  })
+
+  it('returns null for missing or invalid new metrics without using the requested target', async () => {
+    vi.stubGlobal('fetch', mockFetchOk({
+      chosen_mode: 'agg',
+      configs: [{
+        ...EXTERNAL_RESPONSE.configs[0],
+        request_rate: undefined,
+        input_tokens_per_second: undefined,
+        output_tokens_per_second: null,
+        total_tokens_per_second: null,
+        tokens_per_second: null,
+      }],
+    }))
+
+    const result = await callRecommend(VALID_REQUEST) as RecommendResult
+    expect(result.throughput).toMatchObject({
+      requestsPerSecond: null,
+      inputTokensPerSecond: null,
+      outputTokensPerSecond: null,
+      totalTokensPerSecond: null,
+    })
+    expect(result.metadata.inputTokens).toBe(2048)
+  })
+
+  it('keeps output available but total null when an older gateway has no request rate', async () => {
+    vi.stubGlobal('fetch', mockFetchOk({
+      chosen_mode: 'agg',
+      configs: [{
+        ...EXTERNAL_RESPONSE.configs[0],
+        request_rate: undefined,
+        input_tokens_per_second: undefined,
+        output_tokens_per_second: undefined,
+        total_tokens_per_second: undefined,
+        replicas_needed: 2,
+      }],
+    }))
+
+    const result = await callRecommend(VALID_REQUEST) as RecommendResult
+    expect(result.throughput.requestsPerSecond).toBeNull()
+    expect(result.throughput.inputTokensPerSecond).toBeNull()
+    expect(result.throughput.outputTokensPerSecond).toBe(846.93 * 2)
+    expect(result.throughput.totalTokensPerSecond).toBeNull()
+  })
+
+  it('does not accept a reported total when an explicit component is null', async () => {
+    vi.stubGlobal('fetch', mockFetchOk({
+      chosen_mode: 'agg',
+      configs: [{
+        ...EXTERNAL_RESPONSE.configs[0],
+        input_tokens_per_second: null,
+      }],
+    }))
+
+    const result = await callRecommend(VALID_REQUEST) as RecommendResult
+    expect(result.throughput.inputTokensPerSecond).toBeNull()
+    expect(result.throughput.totalTokensPerSecond).toBeNull()
+  })
+
+  it('rejects non-finite, zero, and negative rates instead of producing NaN', async () => {
+    for (const value of [0, -1, NaN, Infinity]) {
+      vi.stubGlobal('fetch', mockFetchOk({
+        chosen_mode: 'agg',
+        configs: [{
+          ...EXTERNAL_RESPONSE.configs[0],
+          replicas_needed: 2,
+          request_rate: value,
+          input_tokens_per_second: value,
+          output_tokens_per_second: value,
+          total_tokens_per_second: value,
+        }],
+      }))
+      const result = await callRecommend(VALID_REQUEST) as RecommendResult
+      expect(result.throughput).toMatchObject({
+        requestsPerSecond: null,
+        inputTokensPerSecond: null,
+        outputTokensPerSecond: null,
+        totalTokensPerSecond: null,
+      })
+    }
   })
 })
 

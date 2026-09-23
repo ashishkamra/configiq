@@ -11,6 +11,7 @@ See docs/api/openapi.yaml for the full spec.
 import argparse
 import json
 import logging
+import math
 import sys
 import tempfile
 from pathlib import Path
@@ -37,12 +38,14 @@ from aiconfigurator_core.sdk.perf_database import load_system_spec
 # service runs unchanged when the extras are absent.
 try:
     from configiq import observability
+
     _OBS = True
 except ImportError:
     _OBS = False
 
 try:
     from configiq import mcp as mcp_support
+
     _MCP = True
 except ImportError:
     _MCP = False
@@ -112,7 +115,9 @@ class EstimateRequest(BaseModel):
     # separate prefill and decode pools; the top-level tp/pp/batch fields act
     # as fallbacks for any per-role field left unset.
     mode: Literal["agg", "disagg"] = Field(default="agg", description="Serving mode: 'agg' or 'disagg'.")
-    decode_system: str | None = Field(default=None, description="GPU system for disagg decode workers; defaults to `system`.")
+    decode_system: str | None = Field(
+        default=None, description="GPU system for disagg decode workers; defaults to `system`."
+    )
     prefill_tp_size: int | None = Field(default=None)
     prefill_pp_size: int | None = Field(default=None)
     prefill_moe_tp_size: int | None = Field(default=None)
@@ -162,6 +167,7 @@ class ServingConfig(BaseModel):
 
 class WorkerConfig(BaseModel):
     """Parallelism and serving config for one worker role in a disagg deployment."""
+
     tp: int | None = None
     pp: int | None = None
     dp: int | None = None
@@ -198,6 +204,9 @@ class RecommendConfig(BaseModel):
     concurrency: int | None = None
     request_rate: float | None = None
     tokens_per_second: float | None = None
+    input_tokens_per_second: float | None = None
+    output_tokens_per_second: float | None = None
+    total_tokens_per_second: float | None = None
     tokens_per_second_per_gpu: float | None = None
     tokens_per_second_per_user: float | None = None
     memory: float | None = None
@@ -226,6 +235,7 @@ class RecommendResponse(BaseModel):
 
 class EstimateResponse(BaseModel):
     """Single-point performance estimate for a given parallelism configuration."""
+
     ttft: float
     tpot: float
     request_latency: float | None = None
@@ -312,10 +322,21 @@ _COLUMN_MAP = {
     "version": "backend_version",
 }
 
-_INT_FIELDS = frozenset({
-    "total_gpus_needed", "replicas_needed", "num_total_gpus",
-    "tp", "pp", "dp", "moe_tp", "moe_ep", "cp", "bs", "concurrency",
-})
+_INT_FIELDS = frozenset(
+    {
+        "total_gpus_needed",
+        "replicas_needed",
+        "num_total_gpus",
+        "tp",
+        "pp",
+        "dp",
+        "moe_tp",
+        "moe_ep",
+        "cp",
+        "bs",
+        "concurrency",
+    }
+)
 
 _SM_ARCHITECTURE = {
     70: "volta",
@@ -389,6 +410,11 @@ def _coerce_float(val: Any) -> float | None:
         return None
 
 
+def _positive_finite_float(val: Any) -> float | None:
+    value = _coerce_float(val)
+    return value if value is not None and math.isfinite(value) and value > 0 else None
+
+
 def _inclusive_tpot(ttft: float | None, tpot: float | None, osl: int) -> float | None:
     """Spread TTFT across all output tokens: (ttft + tpot * (osl - 1)) / osl.
 
@@ -432,7 +458,7 @@ def _row_to_config(row: pd.Series, req: RecommendRequest) -> RecommendConfig:
 
     d: dict[str, Any] = {}
     for col, val in row.items():
-        if val is None or (isinstance(val, float) and pd.isna(val)):
+        if val is None or (isinstance(val, float) and not math.isfinite(val)):
             continue
         col_str = str(col)
         if col_str.startswith(("(p)", "(d)", "(e)")):
@@ -446,6 +472,23 @@ def _row_to_config(row: pd.Series, req: RecommendRequest) -> RecommendConfig:
     d.setdefault("backend", req.backend)
     d.setdefault("backend_version", req.backend_version)
 
+    # SDK throughput and achievable request rate are per replica in both modes.
+    # Prefer the recommendation's rate; older rows only carry seq/s. Never
+    # infer an unavailable rate from the requested target or report zero for it.
+    rate = _positive_finite_float(row.get("request_rate")) or _positive_finite_float(row.get("seq/s"))
+    d["request_rate"] = rate
+    output = _positive_finite_float(row.get("tokens/s"))
+    # Keep the legacy output-token field, including a genuine zero, but never
+    # let a non-finite SDK value escape into JSON.
+    legacy_output = _coerce_float(row.get("tokens/s"))
+    d["tokens_per_second"] = legacy_output if legacy_output is not None and math.isfinite(legacy_output) else None
+    input_rate = _positive_finite_float(rate * req.isl) if rate is not None else None
+    d["input_tokens_per_second"] = input_rate
+    d["output_tokens_per_second"] = output
+    d["total_tokens_per_second"] = (
+        _positive_finite_float(input_rate + output) if input_rate is not None and output is not None else None
+    )
+
     cfg = RecommendConfig.model_validate(d)
 
     if is_disagg:
@@ -457,7 +500,8 @@ def _row_to_config(row: pd.Series, req: RecommendRequest) -> RecommendConfig:
             # NOT additive. The meaningful single figure is the worst-case
             # per-GPU across all pools (prefill, decode, and encode).
             phase_mems = [
-                m for m in (
+                m
+                for m in (
                     _coerce_float(row.get("(p)memory")),
                     _coerce_float(row.get("(d)memory")),
                     _coerce_float(row.get("(e)memory")),
@@ -594,8 +638,7 @@ app = FastAPI(
 # Initialize OpenTelemetry (tracing + metrics + HTTP middleware) if the optional
 # extra is present.
 if _OBS:
-    observability.enable(app, service_name="aisimulators", service_version="1.0.0",
-                         meter_name="aisimulators.api")
+    observability.enable(app, service_name="aisimulators", service_version="1.0.0", meter_name="aisimulators.api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -606,8 +649,9 @@ app.add_middleware(
 
 # Expose the API as MCP tools if the optional extra is present.
 if _MCP:
-    mcp_support.mount(app, name="aisimulators",
-                      description="GPU recommendation and performance estimation for LLM inference")
+    mcp_support.mount(
+        app, name="aisimulators", description="GPU recommendation and performance estimation for LLM inference"
+    )
 else:
     logger.info("MCP server unavailable (install with: pip install '.[mcp]')")
 
@@ -625,8 +669,7 @@ def startup_event():
     _DEVICE_DISPLAY_NAMES = load_device_names_from_perf_data()
     if not _DEVICE_DISPLAY_NAMES:
         raise RuntimeError(
-            "No GPU display names loaded from perf data; refusing to start "
-            "without valid performance data."
+            "No GPU display names loaded from perf data; refusing to start without valid performance data."
         )
 
     # Log which supported systems lack perf data (they are hidden from /systems).
@@ -638,7 +681,9 @@ def startup_event():
 @app.post("/recommend")
 def post_recommend(
     req: RecommendRequest,
-    include: str | None = Query(default=None, examples=["config,memory"], description="Comma-separated extras: config, memory."),
+    include: str | None = Query(
+        default=None, examples=["config,memory"], description="Comma-separated extras: config, memory."
+    ),
 ):
     """Find optimal GPU configuration for a workload."""
     try:
@@ -687,26 +732,48 @@ def post_recommend(
                     for worker in [cfg.prefill_config, cfg.decode_config]:
                         if worker and worker.tp:
                             worker.memory_breakdown = _build_memory_breakdown(
-                                effective_path, req.system, backend,
+                                effective_path,
+                                req.system,
+                                backend,
                                 bv or worker.backend_version,
-                                worker.tp or 1, worker.pp or 1,
-                                req.isl, req.osl, worker.num_workers or 1,
+                                worker.tp or 1,
+                                worker.pp or 1,
+                                req.isl,
+                                req.osl,
+                                worker.num_workers or 1,
                                 worker.gemm if worker.gemm and worker.gemm != "half" else None,
                                 worker.kvcache if worker.kvcache and worker.kvcache != "half" else None,
-                                worker.moe_tp, worker.moe_ep,
+                                worker.moe_tp,
+                                worker.moe_ep,
                             )
             else:
                 tp = cfg.tp or 1
                 concurrency = cfg.concurrency or 128
                 if want_config:
                     cfg.serving_config = _build_serving_config(
-                        backend, tp, req.isl, req.osl, concurrency, cfg.gemm, req.prefix,
+                        backend,
+                        tp,
+                        req.isl,
+                        req.osl,
+                        concurrency,
+                        cfg.gemm,
+                        req.prefix,
                     )
                 if want_memory:
                     cfg.memory_breakdown = _build_memory_breakdown(
-                        effective_path, req.system, backend, bv,
-                        tp, cfg.pp or 1, req.isl, req.osl, concurrency,
-                        cfg.gemm, cfg.kvcache, cfg.moe_tp, cfg.moe_ep,
+                        effective_path,
+                        req.system,
+                        backend,
+                        bv,
+                        tp,
+                        cfg.pp or 1,
+                        req.isl,
+                        req.osl,
+                        concurrency,
+                        cfg.gemm,
+                        cfg.kvcache,
+                        cfg.moe_tp,
+                        cfg.moe_ep,
                     )
             configs.append(cfg)
 
@@ -716,7 +783,9 @@ def post_recommend(
 @app.post("/estimate")
 def post_estimate(
     req: EstimateRequest,
-    include: str | None = Query(default=None, examples=["config,memory"], description="Comma-separated extras: config, memory."),
+    include: str | None = Query(
+        default=None, examples=["config,memory"], description="Comma-separated extras: config, memory."
+    ),
 ):
     """Single-point performance estimate for a given parallelism configuration.
 
@@ -833,13 +902,23 @@ def post_estimate(
         want_memory = "memory" in includes
 
         resp.prefill_config = WorkerConfig(
-            tp=p_tp, pp=p_pp, moe_tp=p_moe_tp, moe_ep=p_moe_ep,
-            num_workers=p_workers, batch_size=p_bs, memory_gb=p_mem,
+            tp=p_tp,
+            pp=p_pp,
+            moe_tp=p_moe_tp,
+            moe_ep=p_moe_ep,
+            num_workers=p_workers,
+            batch_size=p_bs,
+            memory_gb=p_mem,
             backend_version=resp.backend_version,
         )
         resp.decode_config = WorkerConfig(
-            tp=d_tp, pp=d_pp, moe_tp=d_moe_tp, moe_ep=d_moe_ep,
-            num_workers=d_workers, batch_size=d_bs, memory_gb=d_mem,
+            tp=d_tp,
+            pp=d_pp,
+            moe_tp=d_moe_tp,
+            moe_ep=d_moe_ep,
+            num_workers=d_workers,
+            batch_size=d_bs,
+            memory_gb=d_mem,
             backend_version=resp.backend_version,
         )
 
@@ -853,27 +932,49 @@ def post_estimate(
                 ):
                     if worker and worker.tp:
                         worker.memory_breakdown = _build_memory_breakdown(
-                            effective_path, worker_sys, req.backend, req.backend_version,
-                            worker.tp, worker.pp or 1, req.isl, req.osl,
+                            effective_path,
+                            worker_sys,
+                            req.backend,
+                            req.backend_version,
+                            worker.tp,
+                            worker.pp or 1,
+                            req.isl,
+                            req.osl,
                             worker.batch_size or req.batch_size,
-                            gemm_q, kv_q, worker.moe_tp, worker.moe_ep,
+                            gemm_q,
+                            kv_q,
+                            worker.moe_tp,
+                            worker.moe_ep,
                         )
         return resp
 
     if "config" in includes:
         resp.serving_config = _build_serving_config(
-            resp.backend or req.backend, req.tp_size, req.isl, req.osl,
-            req.batch_size, resp.gemm, 0,
+            resp.backend or req.backend,
+            req.tp_size,
+            req.isl,
+            req.osl,
+            req.batch_size,
+            resp.gemm,
+            0,
         )
 
     if "memory" in includes:
         with _with_model_config(req.model_path, req.model_config_data) as effective_path:
             resp.memory_breakdown = _build_memory_breakdown(
-                effective_path, req.system, req.backend, req.backend_version,
-                req.tp_size, req.pp_size, req.isl, req.osl, req.batch_size,
+                effective_path,
+                req.system,
+                req.backend,
+                req.backend_version,
+                req.tp_size,
+                req.pp_size,
+                req.isl,
+                req.osl,
+                req.batch_size,
                 req.gemm_quant_mode if req.gemm_quant_mode and req.gemm_quant_mode != "half" else None,
                 req.kvcache_quant_mode if req.kvcache_quant_mode and req.kvcache_quant_mode != "half" else None,
-                req.moe_tp_size, req.moe_ep_size,
+                req.moe_tp_size,
+                req.moe_ep_size,
             )
 
     return resp
@@ -988,15 +1089,17 @@ def get_systems(
                     vendor_name = ""
                 else:
                     vendor_name = "nvidia"
-                entry.update({
-                    "vendor": vendor_name,
-                    "architecture": sm_arch,
-                    "memory_bytes": int(gpu.get("mem_capacity", 0)),
-                    "memory_bandwidth_bytes": int(gpu.get("mem_bw", 0)),
-                    "bf16_tflops": float(gpu.get("bfloat16_tc_flops", 0)) / 1e12,
-                    "tdp_watts": float(gpu.get("power", 0)),
-                    "gpus_per_node": int(node.get("num_gpus_per_node", 0)),
-                })
+                entry.update(
+                    {
+                        "vendor": vendor_name,
+                        "architecture": sm_arch,
+                        "memory_bytes": int(gpu.get("mem_capacity", 0)),
+                        "memory_bandwidth_bytes": int(gpu.get("mem_bw", 0)),
+                        "bf16_tflops": float(gpu.get("bfloat16_tc_flops", 0)) / 1e12,
+                        "tdp_watts": float(gpu.get("power", 0)),
+                        "gpus_per_node": int(node.get("num_gpus_per_node", 0)),
+                    }
+                )
             except Exception:
                 logger.warning("failed to load spec for %s", sys_id)
         systems.append(entry)
@@ -1019,6 +1122,7 @@ def get_metrics(request: Request):
 
 
 # ─── Entrypoint ──────────────────────────────────────────────────────────────
+
 
 def parse(args):
     parser = argparse.ArgumentParser()
