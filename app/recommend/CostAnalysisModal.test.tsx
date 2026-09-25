@@ -4,6 +4,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type { RecommendResult } from '@/lib/api/recommend';
+import { callRecommend } from '@/lib/api/recommend';
 import type { FrontierModel } from '@/lib/hooks/useCostings';
 import { CostAnalysisModal } from './CostAnalysisModal';
 
@@ -42,6 +43,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 async function render(overrides: Partial<React.ComponentProps<typeof CostAnalysisModal>> = {}) {
@@ -67,6 +70,59 @@ async function fill(id: string, value: string) {
 }
 
 describe('CostAnalysisModal', () => {
+  it('transfers completed sizing, scaled replica throughput and request token lengths into cost calculations', async () => {
+    vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'http://test-gateway');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+      chosen_mode: 'agg', configs: [{
+        total_gpus_needed: 12, replicas_needed: 3, num_total_gpus: 4,
+        tp: 4, pp: 1, dp: 1, cp: 1, concurrency: 20, request_rate: 4,
+        input_tokens_per_second: 1200, output_tokens_per_second: 200,
+        total_tokens_per_second: 1400, tokens_per_second: 200,
+        tokens_per_second_per_user: 25,
+      }],
+    }) }));
+    const sized = await callRecommend({
+      model_path: 'sized/model', system: 'gpu-system', backend: 'vllm',
+      isl: 300, osl: 50, ttft: 1000, tpot: 30, target_concurrency: 20,
+      prefix: 0, database_mode: 'HYBRID', top_n: 5,
+    });
+    expect(sized.status).toBe('completed');
+    if (sized.status !== 'completed') return;
+
+    await render({ result: sized, gpusPerNode: 4 });
+    expect(input('cost-gpusPerNode').value).toBe('4');
+    expect(input('cost-nodes').value).toBe('3');
+    expect(document.body.textContent).toContain('sized/model');
+    expect(document.body.textContent).toContain('gpu-system');
+    expect(document.body.textContent).toContain('300 input / 50 output tokens');
+    expect(document.body.textContent).toContain('60 supported concurrent users');
+    expect(document.body.textContent).toContain('3,600 input tokens/s');
+    expect(document.body.textContent).toContain('600 output tokens/s');
+    expect(document.body.textContent).toContain('4,200 total tokens/s');
+    expect(document.body.textContent).toContain('25 output tokens/s/user');
+    await fill('cost-costPerNodeMonth', '1000');
+    expect(document.body.textContent).toContain('$3,000');
+    expect(document.body.textContent).toContain(`${(4200 * 30.44 * 86400 / 1e6).toLocaleString('en-US', { maximumFractionDigits: 2 })}M tokens`);
+
+    const changed = { ...sized, requestId: 'second',
+      recommendation: { ...sized.recommendation, gpusNeeded: 20 },
+      metadata: { ...sized.metadata, modelPath: 'new/model', inputTokens: 600, outputTokens: 100 },
+      throughput: { ...sized.throughput, inputTokensPerSecond: 7200, outputTokensPerSecond: 1200,
+        totalTokensPerSecond: 8400, tokensPerSecondPerUser: 30 },
+      performance: { ...sized.performance, concurrency: 90 },
+    };
+    await render({ result: changed, gpusPerNode: 4 });
+    expect(input('cost-nodes').value).toBe('5');
+    expect(input('cost-costPerNodeMonth').value).toBe('1000');
+    expect(document.body.textContent).toContain('new/model');
+    expect(document.body.textContent).toContain('600 input / 100 output tokens');
+    expect(document.body.textContent).toContain('7,200 input tokens/s');
+    expect(document.body.textContent).toContain('1,200 output tokens/s');
+    expect(document.body.textContent).toContain('8,400 total tokens/s');
+    expect(document.body.textContent).toContain('90 supported concurrent users');
+    expect(document.body.textContent).toContain('$5,000');
+  });
+
   it('opens, closes and retains local state while updating to a new sizing result', async () => {
     await render({ isOpen: false });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -88,6 +144,21 @@ describe('CostAnalysisModal', () => {
     expect(input('cost-nodes').value).toBe('7');
     expect(input('cost-gpusPerNode').value).toBe('3');
     expect(input('cost-costPerNodeMonth').value).toBe('1250');
+  });
+
+  it('uses the new system catalog topology after re-sizing different hardware', async () => {
+    await render();
+    await fill('cost-gpusPerNode', '3');
+    await fill('cost-nodes', '9');
+    await fill('cost-costPerNodeMonth', '1200');
+    await render({ result: { ...result, requestId: 'new-system',
+      metadata: { ...result.metadata, system: 'different-system' },
+      recommendation: { ...result.recommendation, gpusNeeded: 15 },
+    }, gpusPerNode: 5 });
+    expect(input('cost-gpusPerNode').value).toBe('5');
+    expect(input('cost-nodes').value).toBe('3');
+    expect(input('cost-costPerNodeMonth').value).toBe('1200');
+    expect(document.body.textContent).toContain('different-system');
   });
 
   it('does not display pricing when disabled and provides settings navigation', async () => {

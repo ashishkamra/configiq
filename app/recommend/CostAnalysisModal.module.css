@@ -7,6 +7,10 @@
 
 .description { color: #3c3f42; margin: 10px 0 16px; overflow-wrap: anywhere; }
 .heading { font-size: 16px; font-weight: 600; margin: 24px 0 12px; color: #151515; }
+.sizingStats { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 12px; margin: 0; }
+.sizingStats > div { border: 1px solid #d2d2d2; border-radius: 6px; padding: 10px 14px; }
+.sizingStats dt { font-size: 13px; color: #3c3f42; }
+.sizingStats dd { margin: 4px 0 0; color: #151515; font-family: var(--font-mono), monospace; font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
 .field { min-width: 0; }
 .label { display: block; color: #3c3f42; font-size: 13px; font-weight: 600; margin-bottom: 6px; }

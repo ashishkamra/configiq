@@ -67,6 +67,11 @@ function tokens(value: number | null): string {
   return `${(value / 1e6).toLocaleString('en-US', { maximumFractionDigits: 2 })}M tokens`;
 }
 
+function rate(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? value.toLocaleString('en-US', { maximumFractionDigits: 2 }) : 'Unavailable';
+}
+
 const colors = ['#0066cc', '#009596', '#5752d1', '#ec7a08'];
 
 export function CostAnalysisModal({ result, isOpen, onClose, gpusPerNode, costingsEnabled,
@@ -78,6 +83,7 @@ export function CostAnalysisModal({ result, isOpen, onClose, gpusPerNode, costin
   const manualNodes = React.useRef(false);
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
   const [query, setQuery] = React.useState('');
+  const previousSystem = React.useRef(result?.metadata.system ?? null);
 
   // Catalog can arrive after sizing. Preserve edits; never use the current selector's system.
   React.useEffect(() => {
@@ -93,6 +99,19 @@ export function CostAnalysisModal({ result, isOpen, onClose, gpusPerNode, costin
     // The GPU edit handler already recalculates nodes; this effect handles later catalog/sizing updates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gpusPerNode, result?.requestId, result?.recommendation.gpusNeeded, gpuEdited]);
+
+  // A manually edited node layout belongs to its GPU system, not to a later
+  // recommendation using different hardware. Keep demand and cost assumptions.
+  React.useEffect(() => {
+    const system = result?.metadata.system;
+    if (!system || system === previousSystem.current) return;
+    previousSystem.current = system;
+    manualNodes.current = false;
+    setGpuEdited(false);
+    const catalogGpuCount = Number.isSafeInteger(gpusPerNode) && gpusPerNode! > 0 ? gpusPerNode! : 8;
+    setValues(prev => ({ ...prev, gpusPerNode: String(catalogGpuCount),
+      nodes: String(Math.max(1, Math.ceil(result.recommendation.gpusNeeded / catalogGpuCount))) }));
+  }, [result?.metadata.system, result?.recommendation.gpusNeeded, gpusPerNode]);
 
   const gpu = validNumber(values.gpusPerNode, 'gpusPerNode');
   const required = gpu != null && result && Number.isSafeInteger(result.recommendation.gpusNeeded) && result.recommendation.gpusNeeded > 0
@@ -168,6 +187,15 @@ export function CostAnalysisModal({ result, isOpen, onClose, gpusPerNode, costin
       actions={[<Button key="close" variant="primary" onClick={onClose}>Close</Button>]}>
       {result && <div className={styles.content}>
         <p className={styles.description}>Scenario for {result.metadata.modelPath} on {result.metadata.system}: {result.recommendation.gpusNeeded} GPUs, {result.metadata.inputTokens} input / {result.metadata.outputTokens} output tokens, {result.performance.concurrency} supported concurrent users. Throughput comes from this sizing result, not the current form.</p>
+        <h3 className={styles.heading}>Sizing estimates used for cost calculations</h3>
+        <dl className={styles.sizingStats}>
+          <div><dt>Recommended GPUs</dt><dd>{result.recommendation.gpusNeeded} GPUs ({result.recommendation.replicasNeeded} replicas)</dd></div>
+          <div><dt>Achievable request rate</dt><dd>{rate(result.throughput.requestsPerSecond)} requests/s</dd></div>
+          <div><dt>Input goodput</dt><dd>{rate(result.throughput.inputTokensPerSecond)} input tokens/s</dd></div>
+          <div><dt>Output goodput</dt><dd>{rate(result.throughput.outputTokensPerSecond)} output tokens/s</dd></div>
+          <div><dt>Combined goodput</dt><dd>{rate(result.throughput.totalTokensPerSecond)} total tokens/s</dd></div>
+          <div><dt>Output per concurrent user</dt><dd>{rate(result.throughput.tokensPerSecondPerUser)} output tokens/s/user</dd></div>
+        </dl>
         <h3 className={styles.heading}>Deployment and demand assumptions</h3>
         <div className={styles.fields}>
           {fieldSpecs.map(spec => <div key={spec.key} className={styles.field}>
@@ -180,7 +208,7 @@ export function CostAnalysisModal({ result, isOpen, onClose, gpusPerNode, costin
             {errors[spec.key] && <span id={`cost-${spec.key}-error`} className={styles.error} role="alert">{errors[spec.key]}</span>}
           </div>)}
         </div>
-        <p className={styles.description}>Minimum {required ?? '—'} node(s) for the recommended GPUs. Extra nodes add cost but do not increase throughput beyond this sizing result. Demand uses output tokens per second per user as an estimate of turn time; time to first token and idle time between turns are not modeled. Cache hit defaults to 0% (no cached input discount). Node pricing is blank until you supply your own USD/month rate.</p>
+        <p className={styles.description}>Minimum {required ?? '—'} node(s) for the recommended GPUs. Extra nodes add cost but do not increase throughput beyond this sizing result. Demand uses output tokens per second per user as an estimate of turn time; time to first token and idle time between turns are not modeled. Cache hit defaults to 0% (no cached input discount). Node pricing is your assumption; verify it if you size a different GPU system.</p>
         {scenario?.error && <p className={styles.warning} role="alert">{scenario.error}. Metrics that require this rate are unavailable.</p>}
         {scenario && <>
           <h3 className={styles.heading}>Self-hosted scenario</h3>

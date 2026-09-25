@@ -348,7 +348,7 @@ export default function AdvancedEstimate() {
 
   // Fetch live pricing
 
-  const currentGpuOption = catalogGpus.find(g => g.systemId === gpuSystem) ?? catalogGpus[0] ?? null;
+  const sizedGpuOption = result ? catalogGpus.find(g => g.systemId === result.metadata.system) : null;
 
   const [activePreset, setActivePreset] = React.useState<string>('default');
 
@@ -386,9 +386,10 @@ export default function AdvancedEstimate() {
   const tpsVal = useCountUp(result?.throughput.tokensPerSecond ?? 0, 750, 0);
   const memVal = useCountUp(result?.memory.value ?? 0, 750, 1);
 
-  const hwCost = costings.gpuHardwareCosts.get(gpuSystem)?.new_usd ?? null;
+  const sizedSystem = result?.metadata.system ?? gpuSystem;
+  const hwCost = costings.gpuHardwareCosts.get(sizedSystem)?.new_usd ?? null;
   const amortizedHwPerHour = hwCost != null ? hwCost / (AMORT_MONTHS_5YR * HOURS_PER_MONTH) : null;
-  const resolvedCloudRate = resolveCloudRate(costings.gpuCloudRates.get(gpuSystem), preferredCloudProvider);
+  const resolvedCloudRate = resolveCloudRate(costings.gpuCloudRates.get(sizedSystem), preferredCloudProvider);
   const pricePerHour = resolvedCloudRate?.rate ?? amortizedHwPerHour ?? null;
   const rateBasis = resolvedCloudRate
     ? `${resolvedCloudRate.provider.replace('.', ' · ')} ${resolvedCloudRate.kind === 'spot' ? 'spot' : 'on-demand'}`
@@ -583,7 +584,7 @@ export default function AdvancedEstimate() {
                     </Label>
                   </span>
                   <span className={styles.tileValue}>
-                    {gpuCount}<span className={styles.tileUnit}>× {currentGpuOption.label}</span>
+                    {gpuCount}<span className={styles.tileUnit}>× {sizedGpuOption?.label ?? result.metadata.system}</span>
                   </span>
                   <span className={styles.tileSub}>
                     {result.mode === 'disagg'
@@ -648,7 +649,7 @@ export default function AdvancedEstimate() {
                     {ttftMs}<span className={styles.tileUnit}>ms</span>
                   </span>
                   <span className={styles.tileSub}>
-                    {result.performance.ttftLatencyMs <= ttft ? (
+                    {result.performance.ttftLatencyMs <= result.metadata.targetTtftMs ? (
                       <Label color="green" isCompact icon={<CheckCircleIcon />}>meets target</Label>
                     ) : (
                       <Label color="orange" isCompact icon={<ExclamationTriangleIcon />}>above target</Label>
@@ -660,9 +661,9 @@ export default function AdvancedEstimate() {
                 <>
                   <div className={styles.backTitle}>Time to first token</div>
                   <div className={styles.formula}>
-                    target: <span className={styles.em}>{ttft.toLocaleString()} ms</span><br />
+                    target: <span className={styles.em}>{result.metadata.targetTtftMs.toLocaleString()} ms</span><br />
                     estimated: <span className={styles.em}>{result.performance.ttftLatencyMs.toFixed(1)} ms</span><br />
-                    headroom: <span className={styles.em}>{(ttft - result.performance.ttftLatencyMs).toFixed(1)} ms</span><br />
+                    headroom: <span className={styles.em}>{(result.metadata.targetTtftMs - result.performance.ttftLatencyMs).toFixed(1)} ms</span><br />
                     TPOT: <span className={styles.em}>{result.performance.tpotMs.toFixed(1)} ms</span>
                   </div>
                 </>
@@ -815,7 +816,7 @@ export default function AdvancedEstimate() {
                           {(result.performance.requestLatencyMs / 1000).toFixed(1)}s
                         </div>
                         <div style={{ fontSize: 13, color: '#3c3f42', marginTop: 4 }}>
-                          End-to-end for {osl} output tokens
+                          End-to-end for {result.metadata.outputTokens} output tokens
                         </div>
                       </div>
                       <div>
@@ -863,7 +864,7 @@ export default function AdvancedEstimate() {
         result={result}
         isOpen={costAnalysisOpen && result !== null}
         onClose={() => setCostAnalysisOpen(false)}
-        gpusPerNode={result ? catalogGpus.find(g => g.systemId === result.metadata.system)?.gpusPerNode ?? null : null}
+        gpusPerNode={sizedGpuOption?.gpusPerNode ?? null}
         costingsEnabled={costingsEnabled}
         models={costings.models}
         source={pricingSource}
