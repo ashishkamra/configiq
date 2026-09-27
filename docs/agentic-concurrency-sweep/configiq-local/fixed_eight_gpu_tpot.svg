@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="850" height="440" viewBox="0 0 850 440">
+<rect width="100%" height="100%" fill="white"/>
+<g font-family="sans-serif" fill="#151515">
+<text x="65" y="28" font-size="19">Fixed 8 GPUs: TPOT rises with concurrent turns</text>
+<text x="65" y="52" font-size="13">4 replicas × 2 GPUs · 30,000 cached-prefix tokens · TTFT &lt; 3 s</text>
+<path d="M90 122 V360 H762" fill="none" stroke="#3c3f42" stroke-width="2"/>
+<path d="M90 360 H762" stroke="#ddd"/>
+<text x="77" y="364" text-anchor="end" font-size="12">44</text>
+<path d="M90 326 H762" stroke="#ddd"/>
+<text x="77" y="330" text-anchor="end" font-size="12">46</text>
+<path d="M90 292 H762" stroke="#ddd"/>
+<text x="77" y="296" text-anchor="end" font-size="12">48</text>
+<path d="M90 258 H762" stroke="#ddd"/>
+<text x="77" y="262" text-anchor="end" font-size="12">50</text>
+<path d="M90 224 H762" stroke="#ddd"/>
+<text x="77" y="228" text-anchor="end" font-size="12">52</text>
+<path d="M90 190 H762" stroke="#ddd"/>
+<text x="77" y="194" text-anchor="end" font-size="12">54</text>
+<path d="M90 156 H762" stroke="#ddd"/>
+<text x="77" y="160" text-anchor="end" font-size="12">56</text>
+<path d="M90 122 H762" stroke="#ddd"/>
+<text x="77" y="126" text-anchor="end" font-size="12">58</text>
+<path d="M90 258 H762" stroke="#54585c" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="630" y="250" font-size="13">50 ms TPOT limit</text>
+<text x="90.0" y="385" text-anchor="middle" font-size="13">224</text>
+<text x="258.0" y="385" text-anchor="middle" font-size="13">240</text>
+<text x="426.0" y="385" text-anchor="middle" font-size="13">256</text>
+<text x="594.0" y="385" text-anchor="middle" font-size="13">272</text>
+<text x="762.0" y="385" text-anchor="middle" font-size="13">288</text>
+<text x="425" y="418" text-anchor="middle" font-size="14">Concurrent inference turns (4 × batch size)</text>
+<text transform="translate(23 242) rotate(-90)" text-anchor="middle" font-size="14">Predicted TPOT (ms)</text>
+<polyline points="90.0,340.6 258.0,300.1 342.0,279.9 384.0,269.8 426.0,259.7 468.0,238.3 510.0,225.9 594.0,201.2 762.0,151.7" fill="none" stroke="#0066cc" stroke-width="2"/>
+<circle cx="90.0" cy="340.6" r="5" fill="#0066cc"/>
+<circle cx="258.0" cy="300.1" r="5" fill="#0066cc"/>
+<circle cx="342.0" cy="279.9" r="5" fill="#0066cc"/>
+<circle cx="384.0" cy="269.8" r="5" fill="#0066cc"/>
+<circle cx="426.0" cy="259.7" r="5" fill="#0066cc"/>
+<text x="426.0" y="247.7" font-size="12" text-anchor="middle">49.90</text>
+<circle cx="468.0" cy="238.3" r="5" fill="#9b5600"/>
+<text x="468.0" y="260.3" font-size="12" text-anchor="middle">51.16</text>
+<circle cx="510.0" cy="225.9" r="5" fill="#9b5600"/>
+<circle cx="594.0" cy="201.2" r="5" fill="#9b5600"/>
+<circle cx="762.0" cy="151.7" r="5" fill="#9b5600"/>
+</g></svg>
