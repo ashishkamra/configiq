@@ -1,0 +1,9 @@
+gpu_budget,max_tested_concurrency,gpus_required,chosen_mode,replicas,gpus_per_replica,ttft_ms,tpot_ms,reported_concurrency,batch_size,memory_gb,status
+1,28,1,agg,1,1,733.961,48.386,28,28,68.432,adjacent boundary checked; monotonicity assumed
+2,64,2,agg,1,2,678.991,49.903,64,64,58.383,adjacent boundary checked; monotonicity assumed
+3,84,3,agg,3,1,733.961,48.386,84,28,68.432,adjacent boundary checked; monotonicity assumed
+4,128,4,agg,2,2,678.991,49.903,128,64,58.383,adjacent boundary checked; monotonicity assumed
+5,140,5,agg,5,1,733.961,48.386,140,28,68.432,adjacent boundary checked; monotonicity assumed
+6,192,6,agg,3,2,678.991,49.903,192,64,58.383,adjacent boundary checked; monotonicity assumed
+7,196,7,agg,7,1,733.961,48.386,196,28,68.432,adjacent boundary checked; monotonicity assumed
+8,256,8,agg,4,2,678.991,49.903,256,64,58.383,adjacent boundary checked; monotonicity assumed
