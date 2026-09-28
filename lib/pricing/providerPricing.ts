@@ -1,6 +1,7 @@
 // Provider pricing adapter for the aicostings systems API.
 
 import { normalizeCloudRates } from '@/lib/hooks/useCostings'
+import { CLIENT_CACHE_TTL_MS } from '@/lib/cache-policy'
 
 export interface ProviderGpu {
   model: string
@@ -18,7 +19,6 @@ interface CacheEntry {
   timestamp: number
 }
 
-const CACHE_TTL_MS = 30 * 60 * 1000
 let cache: CacheEntry | null = null
 
 interface AicostingsSystem {
@@ -96,7 +96,7 @@ function parseAicostingsResponse(data: unknown): Provider[] {
 
 /** Fetch provider-region GPU rates from the same-origin aicostings proxy. */
 export async function fetchAllProviders(): Promise<Provider[]> {
-  if (cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
+  if (cache && Date.now() - cache.timestamp < CLIENT_CACHE_TTL_MS.costings) {
     return cache.data
   }
 

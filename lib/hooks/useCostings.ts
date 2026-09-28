@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { PricingSource } from '@/contexts/SettingsContext'
+import { CLIENT_CACHE_TTL_MS } from '@/lib/cache-policy'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -163,9 +164,7 @@ export function resolveCloudRate(
 }
 
 // ── Module-level cache ─────────────────────────────────────────────────────
-// Survives re-renders and navigation; 1-hour TTL.
-
-const CACHE_TTL_MS = 60 * 60 * 1000
+// Survives re-renders and navigation; one-hour TTL.
 
 // The fully-parsed result of one fetch, so a source's data is published as a
 // single unit rather than via several shared mutable globals that could tear.
@@ -195,7 +194,7 @@ function isCacheValid(source: PricingSource): boolean {
     cached !== null &&
     cachedSource === source &&
     cacheTimestamp !== null &&
-    Date.now() - cacheTimestamp < CACHE_TTL_MS
+    Date.now() - cacheTimestamp < CLIENT_CACHE_TTL_MS.costings
   )
 }
 

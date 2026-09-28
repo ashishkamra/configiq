@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { DEFAULT_GATEWAY_TIMEOUT_SECONDS } from '@/lib/api/timeout'
+import { CLIENT_CACHE_TTL_MS } from '@/lib/cache-policy'
 
 export interface GpuOption {
   systemId: string
@@ -79,8 +80,7 @@ function mapSystem(s: Record<string, unknown>): GpuOption {
 }
 
 // Module-level cache — shared across all components, survives re-renders
-// TTL of 10 minutes so new models appear without a hard refresh
-const CACHE_TTL_MS = 10 * 60 * 1000
+// Ten minutes so new models appear without a hard refresh.
 let cachedGpus: GpuOption[] | null = null
 let cachedModels: string[] | null = null
 let cachedModelSpecs: Map<string, ModelSpec> | null = null
@@ -91,7 +91,7 @@ let fetchPromise: Promise<void> | null = null
 
 function isCacheValid(): boolean {
   return cachedGpus !== null && cachedModels !== null && cachedModelSpecs !== null && cachedBackends !== null &&
-    cacheTimestamp !== null && Date.now() - cacheTimestamp < CACHE_TTL_MS
+    cacheTimestamp !== null && Date.now() - cacheTimestamp < CLIENT_CACHE_TTL_MS.catalog
 }
 
 export function useCatalog(): Catalog {
