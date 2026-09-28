@@ -17,6 +17,7 @@ import {
   CalculatorIcon,
   RouteIcon,
   BoltIcon,
+  CubesIcon,
 } from "@patternfly/react-icons";
 import Link from "next/link";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -66,6 +67,13 @@ const costingsTools = [
       "Analyze request routing between model tiers to optimize cost vs quality tradeoffs.",
     href: "/routing",
     icon: <RouteIcon />,
+  },
+  {
+    title: "Cluster cost",
+    description:
+      "Compare cloud, on-premise, and hybrid infrastructure costs for GPU clusters.",
+    href: "/cluster-cost",
+    icon: <CubesIcon />,
   },
 ];
 
