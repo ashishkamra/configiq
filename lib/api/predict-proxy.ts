@@ -18,6 +18,14 @@ export async function handlePredict(
   const timeoutSeconds = gatewayTimeoutSeconds()
   const extraHeaders = deprecated ? DEPRECATION_HEADERS : {}
 
+  if (!baseUrl) {
+    recordErrorCode(route, 'AISIM_NOT_CONFIGURED', 503)
+    return NextResponse.json(
+      { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
+      { status: 503, headers: extraHeaders },
+    )
+  }
+
   let body: unknown
   try {
     body = await req.json()
@@ -32,14 +40,6 @@ export async function handlePredict(
     ? (body as { model_path?: unknown }).model_path
     : undefined
   if (metricRoute === 'predict') recordModelRequest('predict', model)
-
-  if (!baseUrl) {
-    recordErrorCode(route, 'AISIM_NOT_CONFIGURED', 503)
-    return NextResponse.json(
-      { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
-      { status: 503, headers: extraHeaders },
-    )
-  }
 
   const { searchParams } = new URL(req.url)
   const include = searchParams.get('include')
