@@ -29,9 +29,25 @@ const nextConfig = {
     "@patternfly/react-icons",
     "@patternfly/react-table",
   ],
-  webpack(config, { dev }) {
+  serverExternalPackages: [
+    '@opentelemetry/api',
+    '@opentelemetry/auto-instrumentations-node',
+    '@opentelemetry/exporter-metrics-otlp-http',
+    '@opentelemetry/exporter-prometheus',
+    '@opentelemetry/exporter-trace-otlp-http',
+    '@opentelemetry/sdk-metrics',
+    '@opentelemetry/sdk-node',
+  ],
+  webpack(config, { dev, isServer }) {
     if (dev) {
       config.cache = { type: 'memory' };
+    }
+    if (isServer) {
+      config.externals = [
+        ...(config.externals || []),
+        /^@opentelemetry\//,
+        '@grpc/grpc-js',
+      ];
     }
     config.ignoreWarnings = [
       ...(config.ignoreWarnings || []),
