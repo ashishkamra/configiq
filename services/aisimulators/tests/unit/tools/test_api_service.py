@@ -237,6 +237,7 @@ class TestRecommend:
         assert resp.status_code == 200
         cfg = resp.json()["configs"][0]
         assert cfg["concurrency"] == 1
+        assert cfg["request_rate"] == pytest.approx(0.757584)
         assert cfg["tokens_per_second_per_gpu"] == pytest.approx(96.970742)
         assert cfg["tokens_per_second_per_user"] == pytest.approx(112.608)
 

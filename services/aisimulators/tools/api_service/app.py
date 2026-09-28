@@ -741,7 +741,7 @@ def _aisimulate_candidate_config(candidate: Any, req: RecommendRequest) -> Recom
         tokens_per_second_per_user=_per_user_throughput(metrics, concurrency),
         memory=_metric(metrics, "memory_gb", "memory", "peak_memory_gb"),
         concurrency=concurrency,
-        request_rate=_metric(metrics, "request_rate", "requests_per_second"),
+        request_rate=_metric(metrics, "request_rate", "requests_per_second", "request_throughput_rps"),
         power_w=_metric(metrics, "power_w", "mean_power_w"),
         gemm=metrics.get("gemm") or engine.get("gemm_quant_mode"),
         kvcache=metrics.get("kvcache") or engine.get("kvcache_quant_mode"),
