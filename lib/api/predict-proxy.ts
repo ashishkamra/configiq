@@ -60,7 +60,7 @@ export async function handlePredict(
     try {
       data = JSON.parse(text)
     } catch {
-      recordErrorCode(route, 'AISIM_INVALID_RESPONSE', 502)
+    recordErrorCode(route, 'AISIM_INVALID_RESPONSE', 502, model)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502, headers: { ...extraHeaders, 'Cache-Control': 'no-store' } },
@@ -76,7 +76,7 @@ export async function handlePredict(
       else if (res.status === 401 || raw.includes('authentication') || raw.includes('gated')) code = 'AUTH_REQUIRED'
       else if (res.status === 404 || raw.includes('not found')) code = 'MODEL_NOT_FOUND'
       const message = ((d?.error as Record<string, unknown>)?.message ?? d?.detail ?? 'Unknown error').toString()
-      recordErrorCode(route, code, res.status)
+      recordErrorCode(route, code, res.status, model)
       return NextResponse.json(
         { status: 'failed', error: { code, message } },
         { status: res.status, headers: { ...extraHeaders, 'Cache-Control': 'no-store' } },
@@ -89,13 +89,13 @@ export async function handlePredict(
     })
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      recordErrorCode(route, 'AISIM_TIMEOUT', 504)
+      recordErrorCode(route, 'AISIM_TIMEOUT', 504, model)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504, headers: extraHeaders },
       )
     }
-    recordErrorCode(route, 'AISIM_UNAVAILABLE', 502)
+    recordErrorCode(route, 'AISIM_UNAVAILABLE', 502, model)
     return NextResponse.json(
       { status: 'failed', error: { code: 'AISIM_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502, headers: extraHeaders },

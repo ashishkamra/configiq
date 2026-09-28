@@ -7,6 +7,16 @@ const errorResponses = meter.createCounter('configiq.errors', {
   unit: '1',
 });
 
+const recommendErrors = meter.createCounter('configiq.recommend.errors', {
+  description: 'Structured errors returned by recommendation requests',
+  unit: '1',
+});
+
+const predictErrors = meter.createCounter('configiq.predict.errors', {
+  description: 'Structured errors returned by prediction requests',
+  unit: '1',
+});
+
 const recommendRequests = meter.createCounter('configiq.recommend.requests', {
   description: 'Recommendation requests received by ConfigIQ',
   unit: '1',
@@ -56,21 +66,30 @@ function boundedErrorCode(code: string): string {
   return ERROR_CATEGORIES.has(code) ? code : 'unknown';
 }
 
-function boundedModelCategory(model: unknown): string {
+export function modelCategory(model: unknown): string {
   if (typeof model !== 'string') return 'other';
   const category = MODEL_CATEGORIES.find(([, pattern]) => pattern.test(model));
   return category?.[0] ?? 'other';
 }
 
-export function recordErrorCode(route: string, code: string, statusCode: number): void {
-  errorResponses.add(1, {
+export function recordErrorCode(route: string, code: string, statusCode: number, model?: unknown): void {
+  const attributes = {
     'http.route': route,
     'http.response.status_code': statusCode,
     'error.code': boundedErrorCode(code),
-  });
+  };
+  errorResponses.add(1, attributes);
+
+  if (model !== undefined && (route === '/api/recommend' || route === '/api/predict')) {
+    const counter = route === '/api/recommend' ? recommendErrors : predictErrors;
+    counter.add(1, {
+      ...attributes,
+      'model.category': modelCategory(model),
+    });
+  }
 }
 
 export function recordModelRequest(route: 'recommend' | 'predict', model: unknown): void {
   const counter = route === 'recommend' ? recommendRequests : predictRequests;
-  counter.add(1, { 'model.category': boundedModelCategory(model) });
+  counter.add(1, { 'model.category': modelCategory(model) });
 }

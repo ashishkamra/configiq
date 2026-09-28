@@ -14,12 +14,12 @@ const ERROR_STATUS_MAP: Record<string, number> = {
   INTERNAL_ERROR: 500,
 }
 
-async function proxyToGateway(body: Record<string, unknown>, include: string): Promise<NextResponse> {
+async function proxyToGateway(body: Record<string, unknown>, include: string, model: unknown): Promise<NextResponse> {
   const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
   const timeoutSeconds = gatewayTimeoutSeconds()
 
   if (!baseUrl) {
-    recordErrorCode('/api/recommend', 'AISIM_NOT_CONFIGURED', 503)
+    recordErrorCode('/api/recommend', 'AISIM_NOT_CONFIGURED', 503, model)
     return NextResponse.json(
       { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
       { status: 503 },
@@ -39,7 +39,7 @@ async function proxyToGateway(body: Record<string, unknown>, include: string): P
     try {
       data = JSON.parse(text)
     } catch {
-      recordErrorCode('/api/recommend', 'AISIM_INVALID_RESPONSE', 502)
+      recordErrorCode('/api/recommend', 'AISIM_INVALID_RESPONSE', 502, model)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502 },
@@ -53,6 +53,7 @@ async function proxyToGateway(body: Record<string, unknown>, include: string): P
         '/api/recommend',
         typeof error?.code === 'string' ? error.code : 'AISIM_UNAVAILABLE',
         res.status,
+        model,
       )
     }
     return NextResponse.json(data, {
@@ -61,13 +62,13 @@ async function proxyToGateway(body: Record<string, unknown>, include: string): P
     })
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-      recordErrorCode('/api/recommend', 'AISIM_TIMEOUT', 504)
+      recordErrorCode('/api/recommend', 'AISIM_TIMEOUT', 504, model)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504 },
       )
     }
-    recordErrorCode('/api/recommend', 'AISIM_UNAVAILABLE', 502)
+    recordErrorCode('/api/recommend', 'AISIM_UNAVAILABLE', 502, model)
     return NextResponse.json(
       { status: 'failed', error: { code: 'AISIM_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502 },
@@ -103,7 +104,7 @@ function streamRecommendation(
         finish()
       } catch (err: unknown) {
         if (!abortController.signal.aborted) {
-          recordErrorCode('/api/recommend', 'INTERNAL_ERROR', 200)
+          recordErrorCode('/api/recommend', 'INTERNAL_ERROR', 200, request.model_path)
           send({
             type: 'completed',
             response: {
@@ -140,9 +141,10 @@ function streamRecommendation(
 
 export async function POST(req: NextRequest) {
   let modelRequestRecorded = false
+  let model: unknown
   try {
     const body = await req.json()
-    const model = body && typeof body === 'object' && 'model_path' in body
+    model = body && typeof body === 'object' && 'model_path' in body
       ? (body as { model_path?: unknown }).model_path
       : undefined
     recordModelRequest('recommend', model)
@@ -150,7 +152,7 @@ export async function POST(req: NextRequest) {
     const include = req.nextUrl.searchParams.get('include')
 
     if (include) {
-      return proxyToGateway(body, include)
+      return proxyToGateway(body, include, model)
     }
 
     const validated = RecommendRequestSchema.parse(body)
@@ -161,7 +163,7 @@ export async function POST(req: NextRequest) {
 
     if (result.status === 'failed') {
       const httpStatus = ERROR_STATUS_MAP[result.error.code] ?? 500
-      recordErrorCode('/api/recommend', result.error.code, httpStatus)
+      recordErrorCode('/api/recommend', result.error.code, httpStatus, validated.model_path)
       return NextResponse.json(result, { status: httpStatus })
     }
 
@@ -174,7 +176,7 @@ export async function POST(req: NextRequest) {
     const requestId = generateRequestId()
 
     if (err instanceof Error && err.constructor.name === 'ZodError') {
-      recordErrorCode('/api/recommend', 'INVALID_REQUEST', 400)
+      recordErrorCode('/api/recommend', 'INVALID_REQUEST', 400, model)
       const zodErr = err as Error & { issues: unknown[] }
       return NextResponse.json(
         {
@@ -190,7 +192,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    recordErrorCode('/api/recommend', 'INTERNAL_ERROR', 500)
+    recordErrorCode('/api/recommend', 'INTERNAL_ERROR', 500, model)
     return NextResponse.json(
       {
         requestId,

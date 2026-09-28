@@ -26,6 +26,17 @@ describe('OpenTelemetry application metrics', () => {
     });
   });
 
+  it('adds a bounded model category for recommendation errors', () => {
+    recordErrorCode('/api/recommend', 'AISIM_TIMEOUT', 504, 'Qwen/Qwen3-32B');
+
+    expect(add).toHaveBeenLastCalledWith(1, {
+      'http.route': '/api/recommend',
+      'http.response.status_code': 504,
+      'error.code': 'AISIM_TIMEOUT',
+      'model.category': 'qwen',
+    });
+  });
+
   it('records recommendation requests by model', () => {
     recordModelRequest('recommend', 'meta-llama/Llama-3.1-8B-Instruct');
 
