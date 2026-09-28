@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { KvCacheCalcRequestSchema } from '@/lib/api/schemas'
 import { callKvCacheCalc, generateKvRequestId } from '@/lib/api/kv-cache-calc'
+import { recordErrorCode } from '@/lib/otel-metrics'
 
 const ERROR_STATUS_MAP: Record<string, number> = {
   INVALID_REQUEST: 400,
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
 
     if (result.status === 'failed') {
       const httpStatus = ERROR_STATUS_MAP[result.error.code] ?? 500
+      recordErrorCode('/api/memory', result.error.code, httpStatus)
       return NextResponse.json(result, { status: httpStatus })
     }
 
@@ -31,6 +33,7 @@ export async function POST(req: NextRequest) {
     const requestId = generateKvRequestId()
 
     if (err instanceof Error && err.constructor.name === 'ZodError') {
+      recordErrorCode('/api/memory', 'INVALID_REQUEST', 400)
       const zodErr = err as Error & { issues: unknown[] }
       return NextResponse.json(
         {
@@ -46,6 +49,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    recordErrorCode('/api/memory', 'INTERNAL_ERROR', 500)
     return NextResponse.json(
       {
         requestId,

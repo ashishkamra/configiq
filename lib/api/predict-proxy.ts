@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { gatewayTimeoutSeconds } from '@/lib/api/timeout'
+import { recordErrorCode, recordModelRequest } from '@/lib/otel-metrics'
 
 const DEPRECATION_HEADERS = {
   Deprecation: '@1790208000',
@@ -7,12 +8,33 @@ const DEPRECATION_HEADERS = {
   Link: '</api/predict>; rel="successor-version"',
 }
 
-export async function handlePredict(req: NextRequest, deprecated = false): Promise<NextResponse> {
+export async function handlePredict(
+  req: NextRequest,
+  deprecated = false,
+  metricRoute: 'predict' | 'estimate' = 'predict',
+): Promise<NextResponse> {
+  const route = `/api/${metricRoute}`
   const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
   const timeoutSeconds = gatewayTimeoutSeconds()
   const extraHeaders = deprecated ? DEPRECATION_HEADERS : {}
 
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    recordErrorCode(route, 'INVALID_REQUEST', 400)
+    return NextResponse.json(
+      { status: 'failed', error: { code: 'INVALID_REQUEST', message: 'Invalid JSON body' } },
+      { status: 400, headers: extraHeaders },
+    )
+  }
+  const model = body && typeof body === 'object' && 'model_path' in body
+    ? (body as { model_path?: unknown }).model_path
+    : undefined
+  if (metricRoute === 'predict') recordModelRequest('predict', model)
+
   if (!baseUrl) {
+    recordErrorCode(route, 'AISIM_NOT_CONFIGURED', 503)
     return NextResponse.json(
       { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
       { status: 503, headers: extraHeaders },
@@ -24,16 +46,6 @@ export async function handlePredict(req: NextRequest, deprecated = false): Promi
   const gatewayUrl = include
     ? `${baseUrl}/predict?include=${encodeURIComponent(include)}`
     : `${baseUrl}/predict`
-
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json(
-      { status: 'failed', error: { code: 'INVALID_REQUEST', message: 'Invalid JSON body' } },
-      { status: 400, headers: extraHeaders },
-    )
-  }
 
   try {
     const res = await fetch(gatewayUrl, {
@@ -48,6 +60,7 @@ export async function handlePredict(req: NextRequest, deprecated = false): Promi
     try {
       data = JSON.parse(text)
     } catch {
+      recordErrorCode(route, 'AISIM_INVALID_RESPONSE', 502)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502, headers: { ...extraHeaders, 'Cache-Control': 'no-store' } },
@@ -63,6 +76,7 @@ export async function handlePredict(req: NextRequest, deprecated = false): Promi
       else if (res.status === 401 || raw.includes('authentication') || raw.includes('gated')) code = 'AUTH_REQUIRED'
       else if (res.status === 404 || raw.includes('not found')) code = 'MODEL_NOT_FOUND'
       const message = ((d?.error as Record<string, unknown>)?.message ?? d?.detail ?? 'Unknown error').toString()
+      recordErrorCode(route, code, res.status)
       return NextResponse.json(
         { status: 'failed', error: { code, message } },
         { status: res.status, headers: { ...extraHeaders, 'Cache-Control': 'no-store' } },
@@ -75,11 +89,13 @@ export async function handlePredict(req: NextRequest, deprecated = false): Promi
     })
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      recordErrorCode(route, 'AISIM_TIMEOUT', 504)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504, headers: extraHeaders },
       )
     }
+    recordErrorCode(route, 'AISIM_UNAVAILABLE', 502)
     return NextResponse.json(
       { status: 'failed', error: { code: 'AISIM_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502, headers: extraHeaders },

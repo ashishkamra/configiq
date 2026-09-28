@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getTraceEndpoint } from '../otel';
+import { getOtlpEndpoint, getTraceEndpoint } from '../otel';
 
 describe('getTraceEndpoint', () => {
   afterEach(() => {
@@ -28,6 +28,13 @@ describe('getTraceEndpoint', () => {
     vi.stubEnv('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'https://collector.example/custom-traces');
 
     expect(getTraceEndpoint()).toBe('https://collector.example/custom-traces');
+  });
+
+  it('builds the generic metrics endpoint', () => {
+    vi.stubEnv('OTEL_EXPORTER_OTLP_ENDPOINT', 'https://collector.example/otel');
+
+    expect(getOtlpEndpoint('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'v1/metrics'))
+      .toBe('https://collector.example/otel/v1/metrics');
   });
 
   it('disables export for an invalid endpoint', () => {
