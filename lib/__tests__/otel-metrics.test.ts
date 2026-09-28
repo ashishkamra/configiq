@@ -50,4 +50,15 @@ describe('OpenTelemetry application metrics', () => {
 
     expect(add).toHaveBeenCalledWith(1, { 'model.category': 'other' });
   });
+
+  it('records route-specific errors without a model as other', () => {
+    recordErrorCode('/api/predict', 'INVALID_REQUEST', 400);
+
+    expect(add).toHaveBeenLastCalledWith(1, {
+      'http.route': '/api/predict',
+      'http.response.status_code': 400,
+      'error.code': 'INVALID_REQUEST',
+      'model.category': 'other',
+    });
+  });
 });

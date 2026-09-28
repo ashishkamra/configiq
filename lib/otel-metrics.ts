@@ -80,7 +80,7 @@ export function recordErrorCode(route: string, code: string, statusCode: number,
   };
   errorResponses.add(1, attributes);
 
-  if (model !== undefined && (route === '/api/recommend' || route === '/api/predict')) {
+  if (route === '/api/recommend' || route === '/api/predict') {
     const counter = route === '/api/recommend' ? recommendErrors : predictErrors;
     counter.add(1, {
       ...attributes,
