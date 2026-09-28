@@ -14,9 +14,10 @@ const ERROR_STATUS_MAP: Record<string, number> = {
   INTERNAL_ERROR: 500,
 }
 
-async function proxyToGateway(body: Record<string, unknown>, include: string, model: unknown): Promise<NextResponse> {
+async function proxyToGateway(body: Record<string, unknown>, req: NextRequest, include: string | undefined, model: unknown): Promise<NextResponse> {
   const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
   const timeoutSeconds = gatewayTimeoutSeconds()
+  const wantsStream = req.headers.get('accept')?.includes('text/event-stream') ?? false
 
   if (!baseUrl) {
     recordErrorCode('/api/recommend', 'AISIM_NOT_CONFIGURED', 503, model)
@@ -27,12 +28,32 @@ async function proxyToGateway(body: Record<string, unknown>, include: string, mo
   }
 
   try {
-    const res = await fetch(`${baseUrl}/recommend?include=${encodeURIComponent(include)}`, {
+    const upstreamUrl = include
+      ? `${baseUrl}/recommend?include=${encodeURIComponent(include)}`
+      : `${baseUrl}/recommend`
+    const res = await fetch(upstreamUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': wantsStream ? 'text/event-stream' : 'application/json' },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutSeconds * 1000),
+      signal: AbortSignal.any([req.signal, AbortSignal.timeout(timeoutSeconds * 1000)]),
     })
+
+    if (wantsStream && res.ok && res.headers.get('content-type')?.includes('text/event-stream')) {
+      if (!res.body) {
+        return NextResponse.json(
+          { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators returned an empty stream' } },
+          { status: 502 },
+        )
+      }
+      return new NextResponse(res.body, {
+        status: res.status,
+        headers: {
+          'Content-Type': res.headers.get('content-type') ?? 'text/event-stream; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store',
+          'X-Accel-Buffering': 'no',
+        },
+      })
+    }
 
     const text = await res.text()
     let data: unknown
@@ -150,9 +171,13 @@ export async function POST(req: NextRequest) {
     recordModelRequest('recommend', model)
     modelRequestRecorded = true
     const include = req.nextUrl.searchParams.get('include')
+    const baseUrl = process.env.AISIMULATORS_GATEWAY_URL ?? ''
 
-    if (include) {
-      return proxyToGateway(body, include, model)
+    // A /api gateway is another ConfigIQ deployment and already returns the
+    // normalized RecommendResponse. Forward it once instead of parsing that
+    // normalized response as a raw AISimulators service response a second time.
+    if (include || /\/api\/?$/.test(baseUrl)) {
+      return proxyToGateway(body, req, include ?? undefined, model)
     }
 
     const validated = RecommendRequestSchema.parse(body)

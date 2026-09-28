@@ -17,8 +17,10 @@ import {
   CalculatorIcon,
   RouteIcon,
   BoltIcon,
+  CubesIcon,
 } from "@patternfly/react-icons";
 import Link from "next/link";
+import { useSettings } from "@/contexts/SettingsContext";
 
 const tools = [
   {
@@ -49,24 +51,36 @@ const tools = [
     href: "/predict",
     icon: <BoltIcon />,
   },
-  // Hidden pending aicostings API
-  // {
-  //   title: "Hybrid Savings",
-  //   description:
-  //     "Model cost savings between cloud, on-premise, and hybrid GPU deployment strategies.",
-  //   href: "/hybrid-savings",
-  //   icon: <MigrationIcon />,
-  // },
-  // {
-  //   title: "Routing economics",
-  //   description:
-  //     "Analyze request routing between model tiers to optimize cost vs quality tradeoffs.",
-  //   href: "/routing",
-  //   icon: <RouteIcon />,
-  // },
+];
+
+const costingsTools = [
+  {
+    title: "Hybrid savings",
+    description:
+      "Model cost savings between cloud, on-premise, and hybrid GPU deployment strategies.",
+    href: "/hybrid-savings",
+    icon: <MigrationIcon />,
+  },
+  {
+    title: "Routing economics",
+    description:
+      "Analyze request routing between model tiers to optimize cost vs quality tradeoffs.",
+    href: "/routing",
+    icon: <RouteIcon />,
+  },
+  {
+    title: "Cluster cost",
+    description:
+      "Compare cloud, on-premise, and hybrid infrastructure costs for GPU clusters.",
+    href: "/cluster-cost",
+    icon: <CubesIcon />,
+  },
 ];
 
 export default function HomePage() {
+  const { costingsEnabled } = useSettings();
+  const visibleTools = costingsEnabled ? [...tools, ...costingsTools] : tools;
+
   return (
     <>
       <PageSection>
@@ -90,7 +104,7 @@ export default function HomePage() {
 
       <PageSection>
         <Grid hasGutter md={6} xl={4}>
-          {tools.map((tool) => (
+          {visibleTools.map((tool) => (
             <GridItem key={tool.href}>
               <Card isFullHeight isClickable>
                 <CardTitle>

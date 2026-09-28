@@ -2,7 +2,7 @@
    ConfigIQ · theme.css
    Typography + color system for legibility on white console.
    Import once in app/layout.tsx:  import "./theme.css";
-   These intentionally override PatternFly v5 globals that are
+   These intentionally override PatternFly 6 tokens that are
    too light or too small for comfortable reading.
    ============================================================ */
 
@@ -47,13 +47,13 @@
   --gc-font-mono:    "Red Hat Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   /* ============================================================
-     PatternFly v5 global token overrides
+     PatternFly 6 global token overrides
      PF defaults are lighter/smaller than we want. Re-point them.
      ============================================================ */
   --pf-t--global--text--color--regular: var(--gc-text);    /* primary text  */
   --pf-t--global--text--color--subtle: var(--gc-text-2);  /* PF default #6a6e73 is too light */
-  --pf-t--global--color--link--default: var(--gc-link);
-  --pf-t--global--color--link--hover: var(--gc-link-hover);
+  --pf-t--global--text--color--link--default: var(--gc-link);
+  --pf-t--global--text--color--link--hover: var(--gc-link-hover);
   --pf-t--global--color--brand--default: var(--gc-link);
 
   --pf-t--global--font--size--md: 15px;  /* base */
