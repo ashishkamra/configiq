@@ -95,4 +95,32 @@ describe('GET /api/catalog', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(await response.json()).toMatchObject({ error: { code: 'AISIM_INVALID_RESPONSE' } })
   })
+
+  it.each([
+    { systems: [null], models: ['Qwen/Qwen3-8B'] },
+    { systems: [{}], models: ['Qwen/Qwen3-8B'] },
+    { systems: [{ id: 'h200_sxm' }], models: [null] },
+  ])('rejects malformed entries from a direct service catalogue: %j', async payload => {
+    vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'https://aisimulators.dev')
+    const fetchMock = vi.fn((url: string) => Promise.resolve(Response.json(
+      url.includes('/models') ? { models: payload.models } : { systems: payload.systems },
+    )))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const response = await GET(new Request('https://configiq.dev/api/catalog'))
+    expect(response.status).toBe(502)
+    expect(await response.json()).toMatchObject({ error: { code: 'AISIM_INVALID_RESPONSE' } })
+  })
+
+  it('rejects malformed entries from a combined catalogue', async () => {
+    vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'https://configiq.dev/api')
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(Response.json({
+      systems: [null],
+      models: ['Qwen/Qwen3-8B'],
+    }))))
+
+    const response = await GET(new Request('https://local.configiq.test/api/catalog'))
+    expect(response.status).toBe(502)
+    expect(await response.json()).toMatchObject({ error: { code: 'AISIM_INVALID_RESPONSE' } })
+  })
 })

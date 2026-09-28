@@ -37,6 +37,23 @@ function catalogList(data: unknown, key: 'systems' | 'models' | 'backends'): unk
   return Array.isArray(value) ? value : null
 }
 
+function hasUsableId(value: unknown): boolean {
+  if (value === null || typeof value !== 'object') return false
+  const id = (value as Record<string, unknown>).id
+  return typeof id === 'string' && id.trim().length > 0
+}
+
+function validCatalogEntries(
+  systems: unknown[],
+  models: unknown[],
+  backends: unknown[],
+): boolean {
+  return systems.every(hasUsableId) &&
+    models.every(model =>
+      (typeof model === 'string' && model.trim().length > 0) || hasUsableId(model)) &&
+    backends.every(hasUsableId)
+}
+
 function invalidCatalogResponse() {
   return NextResponse.json(
     { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators catalog is missing systems or models' } },
@@ -111,8 +128,9 @@ export async function GET(request: Request) {
       }
       const systems = catalogList(catalogData, 'systems')
       const models = catalogList(catalogData, 'models')
-      if (!systems || !models) return invalidCatalogResponse()
-      return catalogResponse(systems, models, catalogList(catalogData, 'backends') ?? [])
+      const backends = catalogList(catalogData, 'backends') ?? []
+      if (!systems || !models || !validCatalogEntries(systems, models, backends)) return invalidCatalogResponse()
+      return catalogResponse(systems, models, backends)
     }
 
     const [systemsRes, modelsRes, backendsResult] = await Promise.all([
@@ -170,8 +188,9 @@ export async function GET(request: Request) {
 
     const systems = catalogList(systemsData, 'systems')
     const models = catalogList(modelsData, 'models')
-    if (!systems || !models) return invalidCatalogResponse()
-    return catalogResponse(systems, models, catalogList(backendsData, 'backends') ?? [])
+    const backends = catalogList(backendsData, 'backends') ?? []
+    if (!systems || !models || !validCatalogEntries(systems, models, backends)) return invalidCatalogResponse()
+    return catalogResponse(systems, models, backends)
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
       recordErrorCode('/api/catalog', 'AISIM_TIMEOUT', 504)

@@ -52,8 +52,8 @@
      ============================================================ */
   --pf-t--global--text--color--regular: var(--gc-text);    /* primary text  */
   --pf-t--global--text--color--subtle: var(--gc-text-2);  /* PF default #6a6e73 is too light */
-  --pf-t--global--color--link--default: var(--gc-link);
-  --pf-t--global--color--link--hover: var(--gc-link-hover);
+  --pf-t--global--text--color--link--default: var(--gc-link);
+  --pf-t--global--text--color--link--hover: var(--gc-link-hover);
   --pf-t--global--color--brand--default: var(--gc-link);
 
   --pf-t--global--font--size--md: 15px;  /* base */
