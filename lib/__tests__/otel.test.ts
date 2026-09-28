@@ -14,13 +14,13 @@ describe('getTraceEndpoint', () => {
   it('appends the trace path without duplicating a trailing slash', () => {
     vi.stubEnv('OTEL_EXPORTER_OTLP_ENDPOINT', 'https://collector.example/');
 
-    expect(getTraceEndpoint()).toBe('https://collector.example/v1/traces');
+    expect(getTraceEndpoint()).toBe('https://collector.example/traces');
   });
 
   it('preserves an OTLP endpoint path prefix', () => {
     vi.stubEnv('OTEL_EXPORTER_OTLP_ENDPOINT', 'https://collector.example/otel/');
 
-    expect(getTraceEndpoint()).toBe('https://collector.example/otel/v1/traces');
+    expect(getTraceEndpoint()).toBe('https://collector.example/otel/traces');
   });
 
   it('prefers the explicit trace endpoint', () => {
@@ -33,8 +33,8 @@ describe('getTraceEndpoint', () => {
   it('builds the generic metrics endpoint', () => {
     vi.stubEnv('OTEL_EXPORTER_OTLP_ENDPOINT', 'https://collector.example/otel');
 
-    expect(getOtlpEndpoint('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'v1/metrics'))
-      .toBe('https://collector.example/otel/v1/metrics');
+    expect(getOtlpEndpoint('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'metrics'))
+      .toBe('https://collector.example/otel/metrics');
   });
 
   it('disables export for an invalid endpoint', () => {

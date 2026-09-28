@@ -1,14 +1,16 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
+import { PeriodicExportingMetricReader, type MetricReader } from '@opentelemetry/sdk-metrics';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const serviceName = process.env.OTEL_SERVICE_NAME || 'configiq-webapp';
 
 export function getOtlpEndpoint(
   signalVariable: 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT' | 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT',
-  signalPath: 'v1/traces' | 'v1/metrics',
+  signalPath: 'traces' | 'metrics',
 ): string | undefined {
   const signalEndpoint = process.env[signalVariable];
   if (signalEndpoint) {
@@ -43,23 +45,28 @@ export function getOtlpEndpoint(
 }
 
 export function getTraceEndpoint(): string | undefined {
-  return getOtlpEndpoint('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'v1/traces');
+  return getOtlpEndpoint('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'traces');
 }
+
+let prometheusExporter: PrometheusExporter | undefined;
 
 export function initOtel(): NodeSDK {
   const traceEndpoint = getTraceEndpoint();
-  const metricsEndpoint = getOtlpEndpoint('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'v1/metrics');
+  const metricsEndpoint = getOtlpEndpoint('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'metrics');
+  prometheusExporter = new PrometheusExporter({ preventServerStart: true });
+  const metricReaders: MetricReader[] = [prometheusExporter];
+  if (metricsEndpoint) {
+    metricReaders.push(
+      new PeriodicExportingMetricReader({
+        exporter: new OTLPMetricExporter({ url: metricsEndpoint }),
+      }),
+    );
+  }
   const sdk = new NodeSDK({
     ...(traceEndpoint
       ? { traceExporter: new OTLPTraceExporter({ url: traceEndpoint }) }
       : {}),
-    ...(metricsEndpoint
-      ? {
-          metricReader: new PeriodicExportingMetricReader({
-            exporter: new OTLPMetricExporter({ url: metricsEndpoint }),
-          }),
-        }
-      : {}),
+    metricReaders,
     instrumentations: [getNodeAutoInstrumentations()],
     serviceName,
   });
@@ -87,4 +94,31 @@ export function initOtel(): NodeSDK {
   );
 
   return sdk;
+}
+
+export function getPrometheusMetrics(): Promise<Response> {
+  if (!prometheusExporter) {
+    return Promise.resolve(new Response('# OpenTelemetry metrics are not initialized\n', { status: 503 }));
+  }
+
+  return new Promise(resolve => {
+    const headers: Record<string, string> = {};
+    let responseStatusCode = 200;
+    const response = {
+      get statusCode() {
+        return responseStatusCode;
+      },
+      set statusCode(value: number) {
+        responseStatusCode = value;
+      },
+      setHeader(name: string, value: string) {
+        headers[name.toLowerCase()] = value;
+      },
+      end(body?: string) {
+        resolve(new Response(body ?? '', { status: responseStatusCode, headers }));
+      },
+    } as unknown as ServerResponse;
+
+    prometheusExporter?.getMetricsRequestHandler({} as IncomingMessage, response);
+  });
 }
