@@ -554,7 +554,7 @@ export default function ClusterCostPage() {
       // Check if we're using fallback (first provider is 'gcp' with exactly those GPUs)
       const isFallback = data.length > 0 && data[0]?.id === 'gcp' && data[0]?.gpus?.length === 4
       if (isFallback) {
-        setProviderError('Could not reach pricing worker — using cached prices')
+        setProviderError('Could not reach aicostings — live rates unavailable')
       }
     } catch (error) {
       setProviderError('Failed to load provider data')

@@ -75,11 +75,11 @@ This document provides comprehensive component diagrams, data flow visualization
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  ┌────────────────┐  ┌────────────────┐  ┌──────────────────┐ │
-│  │ gpu-catalog    │  │ model-specs    │  │ Cloudflare Worker│ │
+│  │ gpu-catalog    │  │ model-specs    │  │ aicostings       │ │
 │  │ .json          │  │ .json          │  │ (Live Pricing)   │ │
 │  │                │  │                │  │                  │ │
-│  │ 15 GPUs        │  │ Model params   │  │ 133 prices       │ │
-│  │ VRAM, bandwidth│  │ layers, heads  │  │ 15 GPUs          │ │
+│  │ 15 GPUs        │  │ Model params   │  │ cloud GPU rates  │ │
+│  │ VRAM, bandwidth│  │ layers, heads  │  │                  │ │
 │  └────────────────┘  └────────────────┘  └──────────────────┘ │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -439,11 +439,10 @@ Performance.tsx
 │ Browser  │
 └────┬─────┘
      │
-     ├─→ GET /api/v1/gpus?live_pricing=true
+     ├─→ GET /api/costings/systems?include=cloud
      │   │
-     │   ├─→ Load gpu-catalog.json
-     │   └─→ Fetch from Cloudflare Worker
-     │       └─→ Returns 133 prices for 15 GPUs
+     │   └─→ Proxy to aicostings /systems
+     │       └─→ Returns live cloud GPU rates
      │
      ├─→ GET /api/v1/models
      │   │

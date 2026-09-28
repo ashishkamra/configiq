@@ -639,18 +639,10 @@ export default function Performance() {
 
   // Use live pricing if available, fallback to estimated pricing from hardware cost
   const currentCatalogGpu = catalogGpus.find(g => g.systemId === gpu);
-  const gpuLabel = currentCatalogGpu?.label ?? '';
   const hwCostEntry = costings.gpuHardwareCosts.get(gpu)
   const catalogGpuForPricing = hwCostEntry?.new_usd != null
     ? { hardware_cost_usd: hwCostEntry.new_usd, name: currentCatalogGpu?.label ?? gpu }
     : null
-
-  // Map GPU to pricing key for live pricing worker (pending Costings REST API)
-  const gpuPricingKey = gpuLabel.includes('H200') ? 'H200' :
-                        gpuLabel.includes('H100') ? 'H100' :
-                        gpuLabel.includes('A100') ? 'A100' :
-                        gpuLabel.includes('L40S') ? 'L40S' :
-                        gpuLabel.includes('MI300X') ? 'MI300X' : gpuLabel;
 
   const resolvedCloudRate = resolveCloudRate(costings.gpuCloudRates.get(gpu), preferredCloudProvider)
   const gpuPricePerHour: number | null = resolvedCloudRate?.rate ?? null;
