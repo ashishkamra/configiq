@@ -7,6 +7,7 @@ import { GpuCatalogQuerySchema } from '@/lib/api/schemas'
 import { ApiErrors } from '@/lib/api/errors'
 import { formatGpuCatalogResponse } from '@/lib/api/responses'
 import type { GpuSpec } from '@/lib/gpu-math/gpus'
+import { recordErrorCode } from '@/lib/otel-metrics'
 
 // AISimulators /systems response schema
 interface CatalogSystem {
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
     // and bypasses the per-host internal gateway).
     const gatewayUrl = process.env.AISIMULATORS_GATEWAY_URL
     if (!gatewayUrl) {
+      recordErrorCode('/api/gpus', 'AISIM_NOT_CONFIGURED', 503)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
         { status: 503 },
@@ -145,12 +147,14 @@ export async function GET(req: NextRequest) {
 
   } catch (error) {
     if (error instanceof ZodError) {
+      recordErrorCode('/api/gpus', 'validation_error', 400)
       return NextResponse.json(
         ApiErrors.VALIDATION_ERROR(error.issues),
         { status: 400 }
       )
     }
 
+    recordErrorCode('/api/gpus', 'internal_error', 500)
     return NextResponse.json(
       ApiErrors.INTERNAL_ERROR('Failed to fetch GPU catalog'),
       { status: 500 }

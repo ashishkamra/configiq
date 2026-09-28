@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server'
 import { gatewayTimeoutSeconds } from '@/lib/api/timeout'
+import { recordErrorCode } from '@/lib/otel-metrics'
 
 // This is the catalog fetch's own timeout (30s). The value surfaced to the
 // client below is gatewayTimeoutSeconds() — the longer recommend/predict timeout.
@@ -56,6 +57,7 @@ export async function GET(request: Request) {
   // and bypasses the intended per-host internal gateway.
   const baseUrl = process.env.AISIMULATORS_GATEWAY_URL
   if (!baseUrl) {
+    recordErrorCode('/api/catalog', 'AISIM_NOT_CONFIGURED', 503)
     return NextResponse.json(
       { status: 'failed', error: { code: 'AISIM_NOT_CONFIGURED', message: 'AISimulators API URL is not configured' } },
       { status: 503, headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } },
@@ -132,6 +134,7 @@ export async function GET(request: Request) {
     ])
 
     if (!systemsRes.ok || !modelsRes.ok) {
+      recordErrorCode('/api/catalog', 'AISIM_ERROR', 502)
       return NextResponse.json(
         {
           status: 'failed',
@@ -151,6 +154,7 @@ export async function GET(request: Request) {
       systemsData = await systemsRes.json()
       modelsData = await modelsRes.json()
     } catch {
+      recordErrorCode('/api/catalog', 'AISIM_INVALID_RESPONSE', 502)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_INVALID_RESPONSE', message: 'AISimulators returned non-JSON response' } },
         { status: 502, headers: { 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' } },
@@ -170,11 +174,13 @@ export async function GET(request: Request) {
     return catalogResponse(systems, models, catalogList(backendsData, 'backends') ?? [])
   } catch (err: unknown) {
     if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
+      recordErrorCode('/api/catalog', 'AISIM_TIMEOUT', 504)
       return NextResponse.json(
         { status: 'failed', error: { code: 'AISIM_TIMEOUT', message: 'AISimulators API timed out' } },
         { status: 504 },
       )
     }
+    recordErrorCode('/api/catalog', 'AISIM_UNAVAILABLE', 502)
     return NextResponse.json(
       { status: 'failed', error: { code: 'AISIM_UNAVAILABLE', message: 'AISimulators API is unreachable' } },
       { status: 502 },

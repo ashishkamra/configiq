@@ -403,7 +403,7 @@ function useParticles(ref: React.RefObject<HTMLCanvasElement>, breakdown: CalcRe
       cancelAnimationFrame(raf)
       ro.disconnect()
     }
-  }, [breakdown])
+  }, [breakdown, ref])
 }
 
 // Compact layer visualization - horizontal bar + rows
