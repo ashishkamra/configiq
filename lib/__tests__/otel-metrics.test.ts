@@ -30,13 +30,13 @@ describe('OpenTelemetry application metrics', () => {
     recordModelRequest('recommend', 'meta-llama/Llama-3.1-8B-Instruct');
 
     expect(add).toHaveBeenCalledWith(1, {
-      'model.name': 'meta-llama/Llama-3.1-8B-Instruct',
+      'model.category': 'other',
     });
   });
 
   it('uses unknown for missing model names', () => {
     recordModelRequest('predict', '  ');
 
-    expect(add).toHaveBeenCalledWith(1, { 'model.name': 'unknown' });
+    expect(add).toHaveBeenCalledWith(1, { 'model.category': 'other' });
   });
 });

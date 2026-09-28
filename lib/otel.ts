@@ -48,6 +48,11 @@ export function getTraceEndpoint(): string | undefined {
   return getOtlpEndpoint('OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'traces');
 }
 
+function logEndpoint(endpoint: string): string {
+  const parsed = new URL(endpoint);
+  return `${parsed.origin}${parsed.pathname}`;
+}
+
 let prometheusExporter: PrometheusExporter | undefined;
 
 export function initOtel(): NodeSDK {
@@ -65,7 +70,7 @@ export function initOtel(): NodeSDK {
   const sdk = new NodeSDK({
     ...(traceEndpoint
       ? { traceExporter: new OTLPTraceExporter({ url: traceEndpoint }) }
-      : {}),
+      : { spanProcessors: [] }),
     metricReaders,
     instrumentations: [getNodeAutoInstrumentations()],
     serviceName,
@@ -89,7 +94,7 @@ export function initOtel(): NodeSDK {
 
   console.info(
     traceEndpoint
-      ? `OpenTelemetry initialized with OTLP endpoint: ${traceEndpoint}`
+      ? `OpenTelemetry initialized with OTLP endpoint: ${logEndpoint(traceEndpoint)}`
       : 'OpenTelemetry initialized without an OTLP exporter'
   );
 
@@ -115,7 +120,8 @@ export function getPrometheusMetrics(): Promise<Response> {
         headers[name.toLowerCase()] = value;
       },
       end(body?: string) {
-        resolve(new Response(body ?? '', { status: responseStatusCode, headers }));
+        const failed = body?.startsWith('# failed to export metrics:') ?? false;
+        resolve(new Response(body ?? '', { status: failed ? 500 : responseStatusCode, headers }));
       },
     } as unknown as ServerResponse;
 

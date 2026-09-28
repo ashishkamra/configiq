@@ -9,11 +9,11 @@ export async function register() {
   initOtel();
 }
 
-export const onRequestError: Instrumentation.onRequestError = async (_error, request) => {
+export const onRequestError: Instrumentation.onRequestError = async (_error, _request, context) => {
   if (process.env.NEXT_RUNTIME !== 'nodejs') {
     return;
   }
 
   const { recordErrorCode } = await import('./lib/otel-metrics');
-  recordErrorCode(request.path.split('?')[0], 'UNHANDLED_ERROR', 500);
+  recordErrorCode(context.routePath, 'UNHANDLED_ERROR', 500);
 };
