@@ -656,6 +656,51 @@ def _metric(metrics: dict[str, Any], *names: str) -> float | None:
     return None
 
 
+def _recommendation_concurrency(metrics: dict[str, Any], req: RecommendRequest) -> int | None:
+    """Return reported concurrency, or derive it from Little's law.
+
+    The engine runner reports aggregate request throughput and latency, but does
+    not currently publish the legacy ``concurrency`` field used by this API.
+    """
+    reported = _coerce_int(metrics.get("concurrency") or metrics.get("concurrent_users"))
+    if reported is not None:
+        return reported
+
+    request_rate = _metric(metrics, "request_throughput_rps", "request_rate", "requests_per_second")
+    request_latency = _metric(metrics, "mean_e2e_latency_ms", "e2e_latency_ms", "request_latency")
+    if request_rate is not None and request_latency is not None:
+        return max(0, round(request_rate * request_latency / 1000.0))
+
+    # This is only a last-resort compatibility fallback when a runner provides
+    # neither the legacy field nor enough measurements for Little's law.
+    return round(req.target_concurrency) if req.target_concurrency is not None else None
+
+
+def _per_gpu_throughput(metrics: dict[str, Any], total_gpus: int | None) -> float | None:
+    reported = _metric(metrics, "output_throughput_tok_s_per_gpu")
+    if reported is not None:
+        return reported
+    throughput = _metric(metrics, "output_throughput_tok_s", "tokens_per_second")
+    if throughput is None or not total_gpus or total_gpus <= 0:
+        return None
+    return throughput / total_gpus
+
+
+def _per_user_throughput(metrics: dict[str, Any], concurrency: int | None) -> float | None:
+    reported = _metric(
+        metrics,
+        "output_throughput_tok_s_per_user",
+        "tokens_per_second_per_user",
+        "mean_output_token_throughput_per_user",
+    )
+    if reported is not None:
+        return reported
+    throughput = _metric(metrics, "output_throughput_tok_s", "tokens_per_second")
+    if throughput is None or not concurrency or concurrency <= 0:
+        return None
+    return throughput / concurrency
+
+
 def _aisimulate_worker_config(raw: dict[str, Any], role: str, req: RecommendRequest) -> WorkerConfig | None:
     worker = (raw.get("engine") or {}).get("workers", {}).get(role)
     if not isinstance(worker, dict):
@@ -679,6 +724,7 @@ def _aisimulate_candidate_config(candidate: Any, req: RecommendRequest) -> Recom
     mode = "disagg" if engine.get("mode") == "disaggregated" else "agg"
     agg = workers.get("aggregated") or {}
     parallel = agg.get("parallelism") or {}
+    concurrency = _recommendation_concurrency(metrics, req)
     config = RecommendConfig(
         total_gpus_needed=candidate.used_gpus,
         replicas_needed=parallel.get("replicas"),
@@ -691,12 +737,10 @@ def _aisimulate_candidate_config(candidate: Any, req: RecommendRequest) -> Recom
         tpot=_metric(metrics, "tpot_ms", "mean_tpot_ms", "itl_ms"),
         request_latency=_metric(metrics, "e2e_latency_ms", "mean_e2e_latency_ms"),
         tokens_per_second=_metric(metrics, "output_throughput_tok_s", "tokens_per_second"),
-        tokens_per_second_per_gpu=_metric(metrics, "output_throughput_tok_s_per_gpu"),
-        tokens_per_second_per_user=_metric(
-            metrics, "output_throughput_tok_s_per_user", "tokens_per_second_per_user"
-        ),
+        tokens_per_second_per_gpu=_per_gpu_throughput(metrics, candidate.used_gpus),
+        tokens_per_second_per_user=_per_user_throughput(metrics, concurrency),
         memory=_metric(metrics, "memory_gb", "memory", "peak_memory_gb"),
-        concurrency=_coerce_int(metrics.get("concurrency") or metrics.get("concurrent_users")),
+        concurrency=concurrency,
         request_rate=_metric(metrics, "request_rate", "requests_per_second"),
         power_w=_metric(metrics, "power_w", "mean_power_w"),
         gemm=metrics.get("gemm") or engine.get("gemm_quant_mode"),
@@ -1119,8 +1163,11 @@ def post_predict(
         tpot=tpot,
         request_latency=_metric(prediction.summary, "e2e_latency_ms", "mean_e2e_latency_ms"),
         tokens_per_second=_metric(prediction.summary, "output_throughput_tok_s", "tokens_per_second"),
-        tokens_per_second_per_gpu=_metric(prediction.summary, "output_throughput_tok_s_per_gpu"),
-        tokens_per_second_per_user=_metric(prediction.summary, "output_throughput_tok_s_per_user"),
+        tokens_per_second_per_gpu=_per_gpu_throughput(
+            prediction.summary,
+            _coerce_int(prediction.summary.get("num_total_gpus")),
+        ),
+        tokens_per_second_per_user=_per_user_throughput(prediction.summary, req.batch_size),
         memory=None,
         concurrency=req.batch_size,
         tp=None if is_disagg else req.tp_size,

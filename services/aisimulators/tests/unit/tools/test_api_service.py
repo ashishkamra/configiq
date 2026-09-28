@@ -215,6 +215,32 @@ class TestRecommend:
         assert cfg["backend_version"] == "0.24.0"
 
     @patch("tools.api_service.app._run_aisimulate_recommendation")
+    def test_response_derives_compatibility_metrics_from_engine_report(self, mock_recommend):
+        # The engine runner reports canonical aggregate metrics rather than the
+        # legacy REST names for concurrency and per-unit throughput.
+        candidate = MockCandidate(
+            used_gpus=1,
+            metrics={
+                "ttft_ms": 192.178766,
+                "mean_tpot_ms": 8.88037,
+                "mean_e2e_latency_ms": 1319.985776,
+                "request_throughput_rps": 0.757584,
+                "output_throughput_tok_s": 96.970742,
+                "mean_output_token_throughput_per_user": 112.608,
+            },
+        )
+        mock_recommend.return_value = make_mock_recommendation_result([candidate])
+
+        body = {**VALID_RECOMMEND_BODY, "target_concurrency": 1, "isl": 2048, "osl": 128}
+        resp = client.post("/recommend", json=body)
+
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        assert cfg["concurrency"] == 1
+        assert cfg["tokens_per_second_per_gpu"] == pytest.approx(96.970742)
+        assert cfg["tokens_per_second_per_user"] == pytest.approx(112.608)
+
+    @patch("tools.api_service.app._run_aisimulate_recommendation")
     def test_inclusive_tpot(self, mock_recommend):
         mock_recommend.return_value = make_mock_recommendation_result()
         body = {**VALID_RECOMMEND_BODY, "inclusive_tpot": True}
