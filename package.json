@@ -41,5 +41,9 @@
   "overrides": {
     "js-yaml": "^4.3.2",
     "postcss": "^8.5.18"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true,
+    "unrs-resolver@1.11.1": true
   }
 }
