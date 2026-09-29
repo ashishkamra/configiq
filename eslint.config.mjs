@@ -17,6 +17,7 @@ export default defineConfig([
   globalIgnores([
     '.next/**',
     'node_modules/**',
+    '**/.venv/**',
     'coverage/**',
     'docs/**',
     'public/widgets/**',

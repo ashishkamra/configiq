@@ -66,6 +66,11 @@ export interface RecommendResult {
     tokensPerSecond: number
     tokensPerSecondPerGpu: number
     tokensPerSecondPerUser: number
+    /** All rates describe the complete candidate cluster, not one replica. */
+    requestsPerSecond: number | null
+    inputTokensPerSecond: number | null
+    outputTokensPerSecond: number | null
+    totalTokensPerSecond: number | null
   }
   memory: {
     /** Worst-case peak memory usage per GPU (GB). Checked against one GPU's HBM. */
@@ -138,6 +143,9 @@ export function isMoeConfig(moeTp: number | null, moeEp: number | null): boolean
 }
 
 const dim = (v: number | null | undefined): number => (v != null && v > 0 ? v : 1)
+
+const positiveFinite = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 
 /**
  * GPUs consumed by a single worker = tp·pp·dp·cp. This mirrors the
@@ -337,6 +345,17 @@ export async function callRecommend(
   // this cluster value by replicas to obtain one scalable replica's capacity.
   const clusterConcurrency = Math.round((best.concurrency as number) ?? 0)
   const clusterTokensPerSecond = (best.tokens_per_second as number) ?? 0
+  const requestRate = positiveFinite(best.request_rate)
+  // Older gateways omit the split fields. The measured request rate and
+  // output throughput are already cluster totals, never requested SLA targets.
+  const inputRate = best.input_tokens_per_second === undefined
+    ? (requestRate === null ? null : positiveFinite(requestRate * request.isl))
+    : positiveFinite(best.input_tokens_per_second)
+  const outputRate = best.output_tokens_per_second === undefined
+    ? positiveFinite(best.tokens_per_second) : positiveFinite(best.output_tokens_per_second)
+  const totalRate = inputRate === null || outputRate === null ? null
+    : best.total_tokens_per_second === undefined
+      ? positiveFinite(inputRate + outputRate) : positiveFinite(best.total_tokens_per_second)
   const ttftLatencyMs = (best.ttft as number) ?? 0
   const tpotMs = (best.tpot as number) ?? 0
   const requestLatencyMs = (best.request_latency as number) ?? 0
@@ -396,6 +415,10 @@ export async function callRecommend(
       tokensPerSecond: clusterTokensPerSecond,
       tokensPerSecondPerGpu: (best.tokens_per_second_per_gpu as number) ?? 0,
       tokensPerSecondPerUser: (best.tokens_per_second_per_user as number) ?? 0,
+      requestsPerSecond: requestRate,
+      inputTokensPerSecond: inputRate,
+      outputTokensPerSecond: outputRate,
+      totalTokensPerSecond: totalRate,
     },
     memory: {
       value: (best.memory as number) ?? 0,

@@ -404,13 +404,22 @@ components:
           type: integer
           description: Cluster-wide concurrency level at which these metrics hold.
         request_rate:
-          type: number
-          description: Achievable request rate (req/s).
+          type: [number, 'null']
+          description: Measured cluster-wide request throughput (req/s); null if unavailable or invalid.
 
         # Throughput
         tokens_per_second:
           type: number
           description: Cluster-wide output-token throughput (tokens/s) for the complete candidate.
+        input_tokens_per_second:
+          type: [number, 'null']
+          description: Cluster-wide input tokens/s; uses measured request throughput times requested ISL when not directly reported.
+        output_tokens_per_second:
+          type: [number, 'null']
+          description: Measured cluster-wide output tokens/s; null when unavailable or invalid.
+        total_tokens_per_second:
+          type: [number, 'null']
+          description: Sum of cluster-wide input and output rates; null unless both are positive and finite.
         tokens_per_second_per_gpu:
           type: number
           description: Tokens/s per GPU.

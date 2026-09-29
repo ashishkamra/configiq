@@ -70,14 +70,15 @@ async function fill(id: string, value: string) {
 }
 
 describe('CostAnalysisModal', () => {
-  it('transfers completed sizing, scaled replica throughput and request token lengths into cost calculations', async () => {
+  it('transfers cluster-wide sizing without scaling by replica count', async () => {
     vi.stubEnv('AISIMULATORS_GATEWAY_URL', 'http://test-gateway');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
       chosen_mode: 'agg', configs: [{
         total_gpus_needed: 12, replicas_needed: 3, num_total_gpus: 4,
         tp: 4, pp: 1, dp: 1, cp: 1, concurrency: 20, request_rate: 4,
         input_tokens_per_second: 1200, output_tokens_per_second: 200,
-        total_tokens_per_second: 1400, tokens_per_second: 200,
+         total_tokens_per_second: 1400, tokens_per_second: 200,
+         ttft: 10, tpot: 20,
         tokens_per_second_per_user: 25,
       }],
     }) }));
@@ -95,14 +96,14 @@ describe('CostAnalysisModal', () => {
     expect(document.body.textContent).toContain('sized/model');
     expect(document.body.textContent).toContain('gpu-system');
     expect(document.body.textContent).toContain('300 input / 50 output tokens');
-    expect(document.body.textContent).toContain('60 supported concurrent users');
-    expect(document.body.textContent).toContain('3,600 input tokens/s');
-    expect(document.body.textContent).toContain('600 output tokens/s');
-    expect(document.body.textContent).toContain('4,200 total tokens/s');
+    expect(document.body.textContent).toContain('20 supported concurrent users');
+    expect(document.body.textContent).toContain('1,200 input tokens/s');
+    expect(document.body.textContent).toContain('200 output tokens/s');
+    expect(document.body.textContent).toContain('1,400 total tokens/s');
     expect(document.body.textContent).toContain('25 output tokens/s/user');
     await fill('cost-costPerNodeMonth', '1000');
     expect(document.body.textContent).toContain('$3,000');
-    expect(document.body.textContent).toContain(`${(4200 * 30.44 * 86400 / 1e6).toLocaleString('en-US', { maximumFractionDigits: 2 })}M tokens`);
+    expect(document.body.textContent).toContain(`${(1400 * 30.44 * 86400 / 1e6).toLocaleString('en-US', { maximumFractionDigits: 2 })}M tokens`);
 
     const changed = { ...sized, requestId: 'second',
       recommendation: { ...sized.recommendation, gpusNeeded: 20 },
@@ -183,7 +184,7 @@ describe('CostAnalysisModal', () => {
     await render();
     await fill('cost-costPerNodeMonth', '1000');
     await fill('cost-model-search', 'vendor');
-    expect(document.querySelectorAll('.pf-v5-c-check')).toHaveLength(1);
+    expect(document.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
     const checkbox = input('cost-model-provider/model-a');
     await act(async () => checkbox.click());
     expect(document.body.textContent).toContain('cache price unavailable; regular input used');

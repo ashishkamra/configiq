@@ -239,6 +239,9 @@ class TestRecommend:
         cfg = resp.json()["configs"][0]
         assert cfg["concurrency"] == 1
         assert cfg["request_rate"] == pytest.approx(0.757584)
+        assert cfg["input_tokens_per_second"] == pytest.approx(0.757584 * 2048)
+        assert cfg["output_tokens_per_second"] == pytest.approx(96.970742)
+        assert cfg["total_tokens_per_second"] == pytest.approx(0.757584 * 2048 + 96.970742)
         assert cfg["tokens_per_second_per_gpu"] == pytest.approx(96.970742)
         assert cfg["tokens_per_second_per_user"] == pytest.approx(112.608)
 
@@ -251,6 +254,7 @@ class TestRecommend:
                 "tpot_ms": 25.0,
                 "output_throughput_tok_s": 4000.0,
                 "output_throughput_tok_s_per_gpu": 500.0,
+                "request_throughput_rps": 2.5,
             },
             prediction_config={"engine": {
                 "model": "Qwen/Qwen3-8B", "hardware": "a100_sxm",
@@ -274,6 +278,45 @@ class TestRecommend:
         assert cfg["replicas_needed"] == 4
         assert cfg["num_total_gpus"] == 2
         assert cfg["tokens_per_second"] == 4000.0
+        assert cfg["request_rate"] == 2.5
+        assert cfg["input_tokens_per_second"] == 10000.0
+        assert cfg["output_tokens_per_second"] == 4000.0
+        assert cfg["total_tokens_per_second"] == 14000.0
+
+    @pytest.mark.parametrize("bad_rate", [None, 0, -1, float("nan"), float("inf")])
+    @patch("tools.api_service.app._run_aisimulate_recommendation")
+    def test_no_valid_measured_request_rate_does_not_invent_input(self, mock_recommend, bad_rate):
+        mock_recommend.return_value = make_mock_recommendation_result([
+            MockCandidate(metrics={"request_throughput_rps": bad_rate, "output_throughput_tok_s": 100.0})
+        ])
+        resp = client.post("/recommend", json=VALID_RECOMMEND_BODY)
+        assert resp.status_code == 200
+        cfg = resp.json()["configs"][0]
+        assert cfg["request_rate"] is None
+        assert cfg["input_tokens_per_second"] is None
+        assert cfg["output_tokens_per_second"] == 100.0
+        assert cfg["total_tokens_per_second"] is None
+
+    @patch("tools.api_service.app._run_aisimulate_recommendation")
+    def test_measured_cluster_input_overrides_rate_derived_input(self, mock_recommend):
+        mock_recommend.return_value = make_mock_recommendation_result([
+            MockCandidate(metrics={"request_throughput_rps": 2.0, "input_throughput_tok_s": 1234.0,
+                                   "output_throughput_tok_s": 100.0})
+        ])
+        cfg = client.post("/recommend", json=VALID_RECOMMEND_BODY).json()["configs"][0]
+        assert cfg["input_tokens_per_second"] == 1234.0
+        assert cfg["total_tokens_per_second"] == 1334.0
+
+    @pytest.mark.parametrize("bad_rate", [None, 0, -1, float("nan"), float("inf")])
+    @patch("tools.api_service.app._run_aisimulate_recommendation")
+    def test_invalid_output_rate_does_not_produce_total(self, mock_recommend, bad_rate):
+        mock_recommend.return_value = make_mock_recommendation_result([
+            MockCandidate(metrics={"request_throughput_rps": 2.0, "output_throughput_tok_s": bad_rate})
+        ])
+        cfg = client.post("/recommend", json=VALID_RECOMMEND_BODY).json()["configs"][0]
+        assert cfg["input_tokens_per_second"] == 8000.0
+        assert cfg["output_tokens_per_second"] is None
+        assert cfg["total_tokens_per_second"] is None
 
     @patch("tools.api_service.app._run_aisimulate_recommendation")
     def test_inclusive_tpot(self, mock_recommend):
@@ -908,7 +951,8 @@ class TestRecommendDisagg:
     def test_disagg_result_has_prefill_decode_configs(self, mock_recommend):
         candidate = MockCandidate(
             used_gpus=6,
-            metrics={"ttft_ms": 180.157, "tpot_ms": 24.675},
+            metrics={"ttft_ms": 180.157, "tpot_ms": 24.675,
+                     "request_throughput_rps": 2.0, "output_throughput_tok_s": 300.0},
             prediction_config={"engine": {
                 "model": "Qwen/Qwen3-32B", "hardware": "h200_sxm",
                 "backend": "vllm", "backend_version": "0.24.0", "mode": "disaggregated",
@@ -939,6 +983,10 @@ class TestRecommendDisagg:
         assert cfg["decode_config"]["batch_size"] == 36
         assert cfg["prefill_config"]["cp"] == 1
         assert cfg["total_gpus_needed"] == 6
+        assert cfg["request_rate"] == 2.0
+        assert cfg["input_tokens_per_second"] == 8000.0
+        assert cfg["output_tokens_per_second"] == 300.0
+        assert cfg["total_tokens_per_second"] == 8300.0
         # Per-GPU peak memory is the worst-case across pools, NOT the sum
         # (each (x)memory is checked against a single GPU's capacity).
         assert cfg["memory"] is None

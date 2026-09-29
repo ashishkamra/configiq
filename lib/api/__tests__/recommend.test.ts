@@ -183,6 +183,10 @@ describe('callRecommend', () => {
         concurrency: 128,
         tokens_per_second: 4_000,
         tokens_per_second_per_gpu: 500,
+        request_rate: 2,
+        input_tokens_per_second: 4096,
+        output_tokens_per_second: 4000,
+        total_tokens_per_second: 8096,
       }],
       chosen_mode: 'agg',
     }))
@@ -196,7 +200,52 @@ describe('callRecommend', () => {
     expect(recommendation.recommendation.replicasNeeded).toBe(4)
     expect(recommendation.throughput.tokensPerSecond).toBe(4_000)
     expect(recommendation.performance.concurrency).toBe(128)
+    expect(recommendation.throughput).toMatchObject({
+      requestsPerSecond: 2,
+      inputTokensPerSecond: 4096,
+      outputTokensPerSecond: 4000,
+      totalTokensPerSecond: 8096,
+    })
     expect(recommendation.warnings).toEqual([])
+  })
+
+  it('derives missing split rates from measured cluster goodput, not requested load', async () => {
+    vi.stubGlobal('fetch', mockFetchOk({
+      ...EXTERNAL_RESPONSE,
+      configs: [{ ...EXTERNAL_RESPONSE.configs[0], request_rate: 1.5 }],
+    }))
+    const result = await callRecommend(VALID_REQUEST) as RecommendResult
+    expect(result.throughput.requestsPerSecond).toBe(1.5)
+    expect(result.throughput.inputTokensPerSecond).toBe(1.5 * 2048)
+    expect(result.throughput.outputTokensPerSecond).toBe(846.93)
+    expect(result.throughput.totalTokensPerSecond).toBe(1.5 * 2048 + 846.93)
+  })
+
+  it('does not fabricate input or combined goodput when measured request rate is missing', async () => {
+    for (const value of [undefined, null, 0, -1, NaN, Infinity]) {
+      vi.stubGlobal('fetch', mockFetchOk({
+        ...EXTERNAL_RESPONSE,
+        configs: [{ ...EXTERNAL_RESPONSE.configs[0], request_rate: value }],
+      }))
+      const result = await callRecommend(VALID_REQUEST) as RecommendResult
+      expect(result.throughput).toMatchObject({
+        requestsPerSecond: null,
+        inputTokensPerSecond: null,
+        outputTokensPerSecond: 846.93,
+        totalTokensPerSecond: null,
+      })
+    }
+  })
+
+  it('rejects explicit invalid components even when a total was reported', async () => {
+    vi.stubGlobal('fetch', mockFetchOk({
+      ...EXTERNAL_RESPONSE,
+      configs: [{ ...EXTERNAL_RESPONSE.configs[0], request_rate: 1,
+        input_tokens_per_second: null, total_tokens_per_second: 5000 }],
+    }))
+    const result = await callRecommend(VALID_REQUEST) as RecommendResult
+    expect(result.throughput.inputTokensPerSecond).toBeNull()
+    expect(result.throughput.totalTokensPerSecond).toBeNull()
   })
 
   it('normalizes a disaggregated prefill/decode topology without multiplying it twice', async () => {

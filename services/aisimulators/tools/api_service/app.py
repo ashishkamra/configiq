@@ -226,6 +226,9 @@ class RecommendConfig(BaseModel):
     concurrency: int | None = None
     request_rate: float | None = None
     tokens_per_second: float | None = None
+    input_tokens_per_second: float | None = None
+    output_tokens_per_second: float | None = None
+    total_tokens_per_second: float | None = None
     tokens_per_second_per_gpu: float | None = None
     tokens_per_second_per_user: float | None = None
     memory: float | None = None
@@ -657,6 +660,11 @@ def _metric(metrics: dict[str, Any], *names: str) -> float | None:
     return None
 
 
+def _positive_metric(metrics: dict[str, Any], *names: str) -> float | None:
+    value = _metric(metrics, *names)
+    return value if value is not None and math.isfinite(value) and value > 0 else None
+
+
 def _recommendation_concurrency(metrics: dict[str, Any], req: RecommendRequest) -> int | None:
     """Return reported concurrency, or derive it from Little's law.
 
@@ -726,6 +734,16 @@ def _aisimulate_candidate_config(candidate: Any, req: RecommendRequest) -> Recom
     agg = workers.get("aggregated") or {}
     parallel = agg.get("parallelism") or {}
     concurrency = _recommendation_concurrency(metrics, req)
+    # Runner throughput is measured across all replicas and worker pools.
+    request_rate = _positive_metric(metrics, "request_throughput_rps", "request_rate", "requests_per_second")
+    output_rate = _positive_metric(metrics, "output_throughput_tok_s", "tokens_per_second")
+    input_rate = _positive_metric(metrics, "input_throughput_tok_s")
+    if input_rate is None and request_rate is not None:
+        derived = request_rate * req.isl
+        input_rate = derived if math.isfinite(derived) and derived > 0 else None
+    total_rate = input_rate + output_rate if input_rate is not None and output_rate is not None else None
+    if total_rate is not None and not math.isfinite(total_rate):
+        total_rate = None
     replicas = int(parallel.get("replicas") or 1)
     # candidate.used_gpus is cluster-wide. num_total_gpus is the size of one
     # aggregated replica/worker, which consumers use as their scalable unit.
@@ -751,7 +769,10 @@ def _aisimulate_candidate_config(candidate: Any, req: RecommendRequest) -> Recom
         tokens_per_second_per_user=_per_user_throughput(metrics, concurrency),
         memory=_metric(metrics, "memory_gb", "memory", "peak_memory_gb"),
         concurrency=concurrency,
-        request_rate=_metric(metrics, "request_rate", "requests_per_second", "request_throughput_rps"),
+        request_rate=request_rate,
+        input_tokens_per_second=input_rate,
+        output_tokens_per_second=output_rate,
+        total_tokens_per_second=total_rate,
         power_w=_metric(metrics, "power_w", "mean_power_w"),
         gemm=metrics.get("gemm") or engine.get("gemm_quant_mode"),
         kvcache=metrics.get("kvcache") or engine.get("kvcache_quant_mode"),

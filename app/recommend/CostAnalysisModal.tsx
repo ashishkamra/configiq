@@ -1,8 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { Button, Checkbox, Modal, TextInput } from '@patternfly/react-core';
-import { Chart, ChartAxis, ChartBar, ChartLine } from '@patternfly/react-charts';
+import { Button, Checkbox, Modal, ModalBody, ModalFooter, ModalHeader, TextInput } from '@patternfly/react-core';
+import { Chart, ChartAxis, ChartBar, ChartLine } from '@patternfly/react-charts/victory';
 import type { RecommendResult } from '@/lib/api/recommend';
 import type { FrontierModel } from '@/lib/hooks/useCostings';
 import type { PricingSource } from '@/contexts/SettingsContext';
@@ -183,8 +183,9 @@ export function CostAnalysisModal({ result, isOpen, onClose, gpusPerNode, costin
     ? scenario.utilizationPct : null;
 
   return (
-    <Modal title="Self-hosted cost analysis" variant="large" isOpen={isOpen} onClose={onClose}
-      actions={[<Button key="close" variant="primary" onClick={onClose}>Close</Button>]}>
+    <Modal variant="large" isOpen={isOpen} onClose={onClose}>
+      <ModalHeader title="Self-hosted cost analysis" />
+      <ModalBody tabIndex={0}>
       {result && <div className={styles.content}>
         <p className={styles.description}>Scenario for {result.metadata.modelPath} on {result.metadata.system}: {result.recommendation.gpusNeeded} GPUs, {result.metadata.inputTokens} input / {result.metadata.outputTokens} output tokens, {result.performance.concurrency} supported concurrent users. Throughput comes from this sizing result, not the current form.</p>
         <h3 className={styles.heading}>Sizing estimates used for cost calculations</h3>
@@ -298,6 +299,8 @@ export function CostAnalysisModal({ result, isOpen, onClose, gpusPerNode, costin
           </>}
         </>}
       </div>}
+      </ModalBody>
+      <ModalFooter><Button variant="primary" onClick={onClose}>Close</Button></ModalFooter>
     </Modal>
   );
 }
