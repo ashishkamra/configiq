@@ -35,3 +35,7 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: /language:${{ matrix.language }}
+          # Repository-level default setup owns SARIF uploads. This workflow
+          # provides the required per-language status checks without uploading
+          # a second analysis configuration.
+          upload: false
