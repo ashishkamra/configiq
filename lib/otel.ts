@@ -53,12 +53,20 @@ function logEndpoint(endpoint: string): string {
   return `${parsed.origin}${parsed.pathname}`;
 }
 
+type ConfigIqGlobal = typeof globalThis & {
+  __configiqPrometheusExporter?: PrometheusExporter;
+};
+
+const configIqGlobal = globalThis as ConfigIqGlobal;
 let prometheusExporter: PrometheusExporter | undefined;
 
 export function initOtel(): NodeSDK {
   const traceEndpoint = getTraceEndpoint();
   const metricsEndpoint = getOtlpEndpoint('OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', 'metrics');
   prometheusExporter = new PrometheusExporter({ preventServerStart: true });
+  // Next can load instrumentation and route handlers in separate server bundles.
+  // Keep the exporter in process-global state so /metrics sees the initialized SDK.
+  configIqGlobal.__configiqPrometheusExporter = prometheusExporter;
   const metricReaders: MetricReader[] = [prometheusExporter];
   if (metricsEndpoint) {
     metricReaders.push(
@@ -102,7 +110,8 @@ export function initOtel(): NodeSDK {
 }
 
 export function getPrometheusMetrics(): Promise<Response> {
-  if (!prometheusExporter) {
+  const exporter = prometheusExporter ?? configIqGlobal.__configiqPrometheusExporter;
+  if (!exporter) {
     return Promise.resolve(new Response('# OpenTelemetry metrics are not initialized\n', { status: 503 }));
   }
 
@@ -125,6 +134,6 @@ export function getPrometheusMetrics(): Promise<Response> {
       },
     } as unknown as ServerResponse;
 
-    prometheusExporter?.getMetricsRequestHandler({} as IncomingMessage, response);
+    exporter.getMetricsRequestHandler({} as IncomingMessage, response);
   });
 }
