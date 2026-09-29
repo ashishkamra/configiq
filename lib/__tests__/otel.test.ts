@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getOtlpEndpoint, getTraceEndpoint } from '../otel';
+import { getOtlpEndpoint, getPrometheusMetrics, getTraceEndpoint } from '../otel';
+
+const prometheusExporterKey = '__configiqPrometheusExporter';
 
 describe('getTraceEndpoint', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    delete (globalThis as Record<string, unknown>)[prometheusExporterKey];
   });
 
   it('returns no endpoint when export is not configured', () => {
@@ -44,5 +47,22 @@ describe('getTraceEndpoint', () => {
     expect(getTraceEndpoint()).toBeUndefined();
     expect(warning).toHaveBeenCalledOnce();
     warning.mockRestore();
+  });
+
+  it('serves metrics from the process-global exporter state', async () => {
+    const getMetricsRequestHandler = vi.fn((_request, response) => {
+      response.setHeader('Content-Type', 'text/plain');
+      response.end('# HELP configiq_requests_total test metric\n');
+    });
+    (globalThis as Record<string, unknown>)[prometheusExporterKey] = {
+      getMetricsRequestHandler,
+    };
+
+    const response = await getPrometheusMetrics();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('text/plain');
+    expect(await response.text()).toContain('configiq_requests_total');
+    expect(getMetricsRequestHandler).toHaveBeenCalledOnce();
   });
 });
