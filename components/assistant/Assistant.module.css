@@ -1,0 +1,29 @@
+.page { padding: 24px; max-width: 1500px; margin: auto; color: #151515; font-family: var(--font-body), sans-serif; font-size: 14px; line-height: 1.5; }
+.header h1 { font-family: var(--font-display), sans-serif; font-size: 26px; font-weight: 500; }
+.page h2 { font-family: var(--font-display), sans-serif; font-size: 16px; font-weight: 600; }
+.page h3 { font-size: 14px; font-weight: 600; }
+.page p { color: #3c3f42; margin: 12px 0; }
+.page a { color: #0066cc; }
+.layout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; align-items: start; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.messages { max-height: 520px; overflow: auto; overflow-wrap: anywhere; }
+.message { padding: 12px 0; border-bottom: 1px solid #d2d2d2; }
+.message p { white-space: pre-wrap; }
+.status { display: flex; align-items: center; gap: 12px; min-height: 36px; }
+.send { margin-top: 12px; }
+.editor { margin-top: 20px; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.approval { border-left: 4px solid #0066cc; padding: 12px 16px; margin-top: 16px; background: #f5f5f5; }
+.approval ul { list-style: disc; padding-left: 20px; }
+.results { display: grid; gap: 16px; margin-top: 24px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 16px 0; }
+.metrics dt { color: #3c3f42; font-size: 13px; }
+.metrics dd { color: #151515; font-family: var(--font-mono), monospace; font-size: 15px; font-variant-numeric: tabular-nums; }
+.caption { font-size: 12.5px; overflow-wrap: anywhere; font-family: var(--font-mono), monospace; }
+.page pre { font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 320px; overflow: auto; }
+.page details { margin: 16px 0; color: #3c3f42; }
+.page summary { cursor: pointer; }
+.page :global(.pf-v5-c-form__label-text) { color: #3c3f42; font-size: 14px; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } .page { padding: 16px; } }
+@media (max-width: 500px) { .fields { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .page * { animation: none !important; transition: none !important; } }

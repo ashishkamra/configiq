@@ -15,6 +15,9 @@ import { InfoStrip, InfoStripAction } from '@/components/ui/InfoStrip';
 import { DebugPanel } from '@/components/DebugPanel/DebugPanel';
 
 import styles from './AdvancedEstimate.module.css';
+import NextLink from 'next/link';
+import { FormSelect, FormSelectOption } from '@patternfly/react-core';
+import { takeSizingDraft } from '@/lib/agent/client';
 import { fetchModelConfig } from '@/lib/huggingface/fetch-config';
 import { useRecommend } from '@/contexts/RecommendContext';
 import { isMoeConfig, type PhaseConfig } from '@/lib/api/recommend';
@@ -235,6 +238,11 @@ export default function AdvancedEstimate() {
   const [ttft, setTtft] = React.useState(1000);
   const [tpot, setTpot] = React.useState(30);
   const [targetConcurrency, setTargetConcurrency] = React.useState(1);
+  const [loadMode, setLoadMode] = React.useState<'concurrency' | 'rate'>('concurrency');
+  const [agentBackend, setAgentBackend] = React.useState<string | null>(null);
+  const [agentBackendVersion, setAgentBackendVersion] = React.useState<string | null>(null);
+  const [agentDraftLoaded, setAgentDraftLoaded] = React.useState(false);
+  const checkedAgentDraft = React.useRef(false);
   const [requestLatency, setRequestLatency] = React.useState<number | null>(null);
   const [prefix, setPrefix] = React.useState(0);
 
@@ -242,7 +250,7 @@ export default function AdvancedEstimate() {
   const [modelStatus, setModelStatus] = React.useState<'idle' | 'supported' | 'catalog' | 'fetching' | 'fetched' | 'error'>('idle');
 
   // GPU sizer (persistent across navigation)
-  const { isLoading, result, error, errorCode, elapsed, debugRequest, debugResponse, debugStatus, debugDuration, startSizing } = useRecommend();
+  const { isLoading, result, error, errorCode, elapsed, debugRequest, debugResponse, debugStatus, debugDuration, startSizing, reset: resetSizing } = useRecommend();
   const [debugOpen, setDebugOpen] = React.useState(false);
   const [costAnalysisOpen, setCostAnalysisOpen] = React.useState(false);
 
@@ -257,11 +265,36 @@ export default function AdvancedEstimate() {
   const [latencyInput, setLatencyInput] = React.useState('');
   const [prefixInput, setPrefixInput] = React.useState('0');
 
+  React.useEffect(() => {
+    if (!hydrated || checkedAgentDraft.current || isLoading) return;
+    checkedAgentDraft.current = true;
+    try {
+      const draft = takeSizingDraft(sessionStorage);
+      if (!draft) return;
+      const s = draft.scenario;
+      modelFromSettings.current = true;
+      setModel(s.model_path); setGpuSystem(draft.system);
+      setIsl(s.isl); setIslInput(String(s.isl));
+      setOsl(s.osl); setOslInput(String(s.osl));
+      setTtft(s.ttft); setTtftInput(String(s.ttft));
+      setTpot(s.tpot); setTpotInput(String(s.tpot));
+      setPrefix(s.prefix); setPrefixInput(String(s.prefix));
+      setRequestLatency(s.request_latency); setLatencyInput(s.request_latency === null ? '' : String(s.request_latency));
+      const load = s.target_concurrency ?? s.target_request_rate!;
+      setTargetConcurrency(load); setConcurrencyInput(String(load));
+      setLoadMode(s.target_concurrency === null ? 'rate' : 'concurrency');
+      setAgentBackend(s.backend); setAgentBackendVersion(s.backend_version);
+      setAgentDraftLoaded(true); setExpanded(['perf', 'customize']);
+      resetSizing();
+    } catch { /* Session storage may be disabled; leave the form usable. */ }
+  }, [hydrated, isLoading, resetSizing]);
+
   const invalidISL = islInput === '' || parseInt(islInput, 10) < 1;
   const invalidOSL = oslInput === '' || parseInt(oslInput, 10) < 1;
   const invalidTTFT = ttftInput === '' || !Number.isFinite(Number(ttftInput)) || Number(ttftInput) <= 0;
   const invalidTpot = tpotInput === '' || !Number.isFinite(Number(tpotInput)) || Number(tpotInput) <= 0;
-  const invalidConcurrency = concurrencyInput === '' || parseInt(concurrencyInput, 10) < 1;
+  const invalidConcurrency = concurrencyInput === '' || !Number.isFinite(Number(concurrencyInput)) || Number(concurrencyInput) <= 0
+    || (loadMode === 'concurrency' && !Number.isSafeInteger(Number(concurrencyInput)));
   const invalidLatency = latencyInput !== '' && (!Number.isFinite(Number(latencyInput)) || Number(latencyInput) <= 0);
 
   const handleIslChange = (raw: string) => {
@@ -293,10 +326,10 @@ export default function AdvancedEstimate() {
   };
 
   const handleConcurrencyChange = (raw: string) => {
-    const digits = raw.replace(/[^0-9]/g, '');
+    const digits = raw.replace(loadMode === 'rate' ? /[^0-9.]/g : /[^0-9]/g, '');
     setConcurrencyInput(digits);
-    const n = parseInt(digits, 10);
-    if (!isNaN(n) && n >= 1) setTargetConcurrency(n);
+    const n = Number(digits);
+    if (Number.isFinite(n) && n > 0) setTargetConcurrency(n);
   };
 
   const handleLatencyChange = (raw: string) => {
@@ -353,6 +386,7 @@ export default function AdvancedEstimate() {
   const [activePreset, setActivePreset] = React.useState<string>('default');
 
   const applyPreset = (p: WorkloadPreset) => {
+    setLoadMode('concurrency');
     setIsl(p.isl); setIslInput(String(p.isl));
     setOsl(p.osl); setOslInput(String(p.osl));
     setTtft(p.ttft); setTtftInput(String(p.ttft));
@@ -371,9 +405,11 @@ export default function AdvancedEstimate() {
   const handleCalculate = () => {
     startSizing({
       model_path: model, system: gpuSystem, isl, osl, ttft,
-      tpot, target_concurrency: targetConcurrency, prefix,
+      tpot, prefix,
+      ...(loadMode === 'rate' ? { target_request_rate: targetConcurrency } : { target_concurrency: targetConcurrency }),
       ...(requestLatency != null ? { request_latency: requestLatency } : {}),
-      backend: inferenceBackend,
+      backend: agentBackend ?? inferenceBackend,
+      ...(agentBackendVersion ? { backend_version: agentBackendVersion } : {}),
       // Send the HF config for models AISimulators can't resolve from its catalog.
       ...(needsHfConfig(model, MODEL_OPTIONS) && hfConfig ? { model_config: hfConfig } : {}),
     });
@@ -408,7 +444,13 @@ export default function AdvancedEstimate() {
         <p className={styles.subtitle}>
           Start with just a model name — we fill the rest, then let you tune every assumption.
         </p>
+        <NextLink href="/assistant">Ask ConfigIQ to help plan a workload</NextLink>
       </div>
+
+      {agentDraftLoaded && <InfoStrip>
+        Assistant draft loaded using {agentBackend}{agentBackendVersion ? ` ${agentBackendVersion}` : ''}. Review the fields and choose Calculate; no sizing request was started automatically.
+        {' '}<InfoStripAction onClick={() => { setAgentBackend(null); setAgentBackendVersion(null); setAgentDraftLoaded(false); }}>Use settings backend instead</InfoStripAction>
+      </InfoStrip>}
 
       {/* ─── Input card ─── */}
       <div className={`${styles.card} ${styles.inputCard}`}>
@@ -458,7 +500,7 @@ export default function AdvancedEstimate() {
         Based on your configuration — ISL {isl}, OSL {osl}, TTFT target {(() => {
           const sec = (ttft / 1000).toFixed(3);
           return sec.endsWith('000') ? (ttft / 1000).toFixed(0) : parseFloat(sec).toString();
-        })()}s{prefix > 0 ? `, prefix ${prefix.toLocaleString()} tokens` : ''}, concurrency {targetConcurrency}, TPOT {tpot} ms.
+        })()}s{prefix > 0 ? `, prefix ${prefix.toLocaleString()} tokens` : ''}, {loadMode === 'rate' ? 'requests/s' : 'concurrency'} {targetConcurrency}, TPOT {tpot} ms.
         {' '}<InfoStripAction onClick={() => setExpanded(expanded.includes('customize') ? expanded.filter(e => e !== 'customize') : [...expanded, 'customize'])}>
           Adjust? (edit fields below)
         </InfoStripAction>
@@ -514,13 +556,19 @@ export default function AdvancedEstimate() {
 
             <div className={styles.paramGrid} style={{ marginTop: 12, gridTemplateColumns: 'repeat(3, 1fr)' }}>
               <div>
-                <label className={styles.fieldLabel}>Target concurrency <Term k="concurrent" /></label>
+                <label className={styles.fieldLabel} htmlFor="recommend-load-mode">Load target <Term k="concurrent" /></label>
+                <FormSelect id="recommend-load-mode" value={loadMode} onChange={(_event, value) => setLoadMode(value === 'rate' ? 'rate' : 'concurrency')}>
+                  <FormSelectOption value="concurrency" label="Concurrent in-flight requests" />
+                  <FormSelectOption value="rate" label="Requests per second" />
+                </FormSelect>
                 <input
+                  aria-label={loadMode === 'rate' ? 'Requests per second' : 'Target concurrency'}
                   type="number"
                   className={invalidConcurrency ? styles.paramInputInvalid : styles.paramInput}
                   value={concurrencyInput}
                   onChange={e => handleConcurrencyChange(e.target.value)}
-                  min={1}
+                  min={loadMode === 'rate' ? 0.001 : 1}
+                  step={loadMode === 'rate' ? 'any' : 1}
                 />
               </div>
               <div>

@@ -173,7 +173,8 @@ function parsePhase(raw: RawWorkerConfig | null | undefined): PhaseConfig | null
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 export async function callRecommend(
-  request: RecommendRequest
+  request: RecommendRequest,
+  options: { signal?: AbortSignal; validateRaw?: (data: unknown) => void; readResponse?: (response: Response) => Promise<unknown>; onRequest?: (payload: Record<string, unknown>) => void } = {},
 ): Promise<RecommendResponse> {
   const requestId = generateRequestId()
   const startTime = performance.now()
@@ -204,6 +205,9 @@ export async function callRecommend(
   if (request.prefix != null) externalPayload.prefix = request.prefix
   if (request.model_config != null) externalPayload.model_config = request.model_config
 
+  options.signal?.throwIfAborted()
+  const serializedPayload = JSON.stringify(externalPayload)
+  options.onRequest?.(JSON.parse(serializedPayload) as Record<string, unknown>)
   let response: Response
   try {
     response = await fetch(`${baseUrl}/recommend`, {
@@ -212,8 +216,10 @@ export async function callRecommend(
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      body: JSON.stringify(externalPayload),
-      signal: AbortSignal.timeout(timeoutSeconds * 1000),
+      body: serializedPayload,
+      signal: options.signal
+        ? AbortSignal.any([options.signal, AbortSignal.timeout(timeoutSeconds * 1000)])
+        : AbortSignal.timeout(timeoutSeconds * 1000),
     })
   } catch (err: unknown) {
     const durationMs = Math.round(performance.now() - startTime)
@@ -226,8 +232,8 @@ export async function callRecommend(
   if (!response.ok) {
     let detail = `AISimulators API returned HTTP ${response.status}`
     try {
-      const body = await response.json()
-      if (typeof body.detail === 'string') detail = body.detail
+      const body: unknown = await (options.readResponse ? options.readResponse(response) : response.json())
+      if (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string') detail = body.detail
     } catch { /* ignore parse errors */ }
 
     const code = response.status === 422 ? 'AISIM_NO_CONFIGURATION' : 'AISIM_UNAVAILABLE'
@@ -236,11 +242,13 @@ export async function callRecommend(
 
   let rawData: Record<string, unknown>
   try {
-    rawData = await response.json() as Record<string, unknown>
+    rawData = await (options.readResponse ? options.readResponse(response) : response.json()) as Record<string, unknown>
   } catch {
     return makeError(requestId, 'AISIM_INVALID_RESPONSE', 'AISimulators API returned non-JSON response')
   }
 
+  options.signal?.throwIfAborted()
+  options.validateRaw?.(rawData)
   const configs = rawData.configs as Array<Record<string, unknown>> | undefined
   if (!configs || configs.length === 0) {
     return makeError(requestId, 'AISIM_NO_CONFIGURATION', 'No valid GPU configuration found for this model and hardware combination.')

@@ -163,6 +163,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div style={groupLabelStyle}>ESTIMATE</div>
 
             <NavItemWithIcon
+              icon={ListIcon}
+              label="Ask ConfigIQ"
+              href="/assistant"
+              isActive={pathname === "/assistant"}
+            />
+            <NavItemWithIcon
               icon={SlidersHIcon}
               label="Recommend sizing"
               href="/recommend"
